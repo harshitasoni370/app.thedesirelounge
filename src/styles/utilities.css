@@ -1,0 +1,87 @@
+/* Small utility classes — replaces the handful of Tailwind utility
+   classes used in the original static markup. The bulk of the design
+   system lives in style.css (BEM-style component classes). */
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.bg-brand-bg {
+  background: var(--bg);
+}
+
+.text-white {
+  color: #ffffff;
+}
+
+.antialiased {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-8 {
+  margin-bottom: 2rem;
+}
+
+.text-brand-muted {
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------
+   Lightweight CSS-only replacement for the original GSAP entrance
+   animation on the hero. style.css sets `.hero-anim { opacity: 0 }`
+   expecting JS to animate it in — this fades/rises it in with pure
+   CSS instead, staggered per child, so the hero still feels intentional
+   without pulling GSAP into the React build.
+   --------------------------------------------------------------- */
+@keyframes heroFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-anim {
+  animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-anim:nth-of-type(1) { animation-delay: 0.05s; }
+.hero-anim:nth-of-type(2) { animation-delay: 0.15s; }
+.hero-anim:nth-of-type(3) { animation-delay: 0.25s; }
+.hero-anim:nth-of-type(4) { animation-delay: 0.35s; }
+.hero-anim:nth-of-type(5) { animation-delay: 0.45s; }
+.hero-anim:nth-of-type(6) { animation-delay: 0.55s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-anim {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
