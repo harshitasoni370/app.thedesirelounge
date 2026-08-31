@@ -9,6 +9,7 @@ import { SessionGate } from "@/components/layout/SessionGate";
 import { useSession } from "@/context/SessionContext";
 import { useCategories } from "@/hooks/useCategories";
 import { useMenuItems } from "@/hooks/useMenuItems";
+import { SessionDetails } from "@/components/layout/SessionDetails";
 
 type VegFilter = "veg" | "nonveg";
 
@@ -149,6 +150,7 @@ export function MenuPage() {
   return (
     <main className="page menu-page">
       <Header />
+      <SessionDetails />
       <MenuBack to="/categories" label="Back to Categories" />
       <SessionGate>
         <MenuContent subcategoryId={subcategoryId} categoryId={((location.state as LocationState) || {}).categoryId} />

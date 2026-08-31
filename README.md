@@ -28,8 +28,9 @@ src/
                   + normalize.ts, which maps raw API fields -> the app's own types
   types/          api.types.ts (raw API shapes), menu.types.ts (normalized domain models),
                   cart.types.ts, session.types.ts
-  context/        SessionContext (session — static for now), CartContext, ToastContext
-  config/         staticSession.ts (hardcoded companyId/branchId/tableNumber, edit here)
+  context/        SessionContext (QR session), CartContext, ToastContext
+  config/         urls.ts (API/URL config), staticSession.ts (demo fallback)
+  store/          Redux Toolkit store and QR context slice
   hooks/          useCategories, useCategoryDetail, useSubCategoryDetail, useMenuItems, useHeaderScrolled
   components/     layout/ (Header, MenuBack, SessionGate), category/, menu/, cart/, checkout/, ui/
   pages/          one component per route
@@ -42,23 +43,20 @@ src/
 
 Path alias `@/*` → `src/*` is configured in both `tsconfig.app.json` and `vite.config.ts`.
 
-## How the session works (currently static, by design)
+## How the QR session works
 
-Eventually guests will reach the site by scanning a QR code at their
-table, landing with `companyId` / `branchId` / `tableNumber` in the URL.
-**For now, that data is static** — see `src/config/staticSession.ts` —
-and is only saved into the app when the guest taps **"Explore Menu"**
-on the home page (`HomePage.tsx`), not on page load and not from a URL.
+Guests scan a URL such as:
+`https://dl.thedesirelounge.com?type=Table&location=OudMetha&name=TBL01&resturant=Desire`.
+The Redux `qrContext` thunk sends all query parameters to
+`VITE_QR_CONTEXT_API_URL` and saves the complete `{ params, data, fetchedAt }`
+record in `sessionStorage` under `desire_qr_context`.
 
 Flow:
 
-1. `src/config/staticSession.ts` holds the hardcoded `companyId`,
-   `branchId`, `tableNumber`. Edit this file to change them.
-2. Tapping "Explore Menu" calls `captureSession()` from
-   `SessionContext`, which writes that static data (plus a locally
-  into `localStorage` (`ff_session_v1`) and updates app state. **No API
-  call happens here** — cart and order calls use only their documented
-  request fields.
+1. `SessionContext` reads the Redux response and maps `companyId`, `branchId`,
+  `tableId` and `tableNumber` into `localStorage` (`ff_session_v1`).
+2. Categories, cart, reservation and order API calls read these IDs through
+  `useSession()`. The placed order also keeps the IDs for confirmation/debugging.
 3. From then on (until cleared or the browser storage is wiped):
    - `branchId` is used for every Category/SubCategory/MenuItem/Cart API call.
    - `tableNumber` pre-fills the Table Number field at checkout.
@@ -70,12 +68,8 @@ Flow:
    session saved yet), it shows a "go back to Home" nudge instead of
    silently failing API calls.
 
-**Swapping in the real QR flow later** only requires changing
-`captureSession()` in `src/context/SessionContext.tsx` to read
-`companyId`/`branchId`/`tableNumber` from the URL (e.g. via
-`useSearchParams()`) instead of from `STATIC_SESSION` — every page
-already reads session data through `useSession()`, so nothing else
-needs to change.
+For a different API environment, update `.env.local` or the centralized
+values in `src/config/urls.ts`; do not edit endpoint strings across pages.
 
 ## API integration — matches the `RestaurantOS_UAT` Postman collection
 

@@ -3,12 +3,7 @@ import { Link } from "react-router-dom";
 import { useSession } from "@/context/SessionContext";
 
 /**
- * Wraps any page that needs `branchId` to function. Right now,
- * session data (branchId etc.) is only captured when the guest taps
- * "Explore Menu" on the home page (see HomePage.tsx / SessionContext)
- * — landing directly on a deep link without going through Home means
- * we don't have it yet, so we show a friendly nudge back to Home
- * instead of silently failing API calls.
+ * Wraps pages that need the company and branch IDs loaded from the QR context.
  */
 export function SessionGate({ children }: { children: ReactNode }) {
   const { hasSession, isReady } = useSession();

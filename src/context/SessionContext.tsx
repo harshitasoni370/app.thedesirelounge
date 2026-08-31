@@ -1,4 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchQrContext, selectQrContext } from "@/store/slices/qrContextSlice";
 import { readLocal, writeLocal } from "@/utils/storage";
 import { EMPTY_SESSION, type DiningSession } from "@/types/session.types";
 import { STATIC_SESSION } from "@/config/staticSession";
@@ -19,20 +22,57 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
 /**
- * For now, session data (companyId / branchId / tableId) is static —
- * see src/config/staticSession.ts — instead of being read from a
- * scanned QR code's URL. It is saved to localStorage only when the
- * guest taps "Explore Menu" on the home page, and persists from then
- * on (across reloads and in-app navigation) until cleared.
- *
- * When the real QR-scan flow is ready, only `captureSession()` below
- * needs to change (e.g. to read companyId/branchId/tableId from
- * `useSearchParams()` instead of STATIC_SESSION) — every other page
- * already reads session data through `useSession()` and doesn't need
- * to change.
+ * QR context is fetched by Redux and converted into the session fields
+ * consumed by the category, cart, reservation and order APIs. The static
+ * values remain only as a local fallback when the home-page demo is used
+ * without a QR URL.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const dispatch = useAppDispatch();
+  const qrContext = useAppSelector(selectQrContext);
   const [session, setSession] = useState<DiningSession>(() => readLocal(SESSION_KEY, EMPTY_SESSION));
+
+  const hasQrUrl = Boolean(new URLSearchParams(location.search).get("type"));
+
+  useEffect(() => {
+    if (hasQrUrl) {
+      persist({ ...EMPTY_SESSION, capturedFrom: window.location.href });
+    }
+    dispatch(fetchQrContext(location.search));
+  }, [dispatch, hasQrUrl, location.search]);
+
+  useEffect(() => {
+    if (qrContext.status !== "succeeded" || !qrContext.data) return;
+
+    const readValue = (keys: string[]) => {
+      const wanted = new Set(keys.map((key) => key.toLowerCase()));
+      const visit = (value: unknown): string | null => {
+        if (!value || typeof value !== "object") return null;
+        for (const [key, child] of Object.entries(value)) {
+          if (wanted.has(key.toLowerCase()) && (typeof child === "string" || typeof child === "number")) {
+            return String(child);
+          }
+          const nested = visit(child);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      return visit(qrContext.data);
+    };
+    const readParam = (key: string) => qrContext.params[key] || null;
+
+    const next: DiningSession = {
+      ...session,
+      companyId: readValue(["companyId", "uidCompanyId"]) || session.companyId,
+      branchId: readValue(["branchId", "uidBranchId"]) || session.branchId,
+      tableId: readValue(["tableId", "uidTableId"]) || session.tableId,
+      tableNumber: readValue(["tableNumber", "tableNo"]) || readParam("name") || session.tableNumber,
+      capturedFrom: window.location.href,
+      updatedAt: new Date().toISOString(),
+    };
+    persist(next);
+  }, [qrContext.data, qrContext.params, qrContext.status]);
 
   const persist = (next: DiningSession) => {
     writeLocal(SESSION_KEY, next);
@@ -56,11 +96,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     persist(EMPTY_SESSION);
   };
 
-  const hasSession = Boolean(session.branchId);
+  const hasSession = Boolean(session.companyId && session.branchId);
+  const isReady = !hasQrUrl || qrContext.status === "succeeded" || qrContext.status === "failed";
 
   const value = useMemo<SessionContextValue>(
-    () => ({ session, isReady: true, hasSession, captureSession, setTableNumber, clearSession }),
-    [session, hasSession]
+    () => ({ session, isReady, hasSession, captureSession, setTableNumber, clearSession }),
+    [session, isReady, hasSession]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

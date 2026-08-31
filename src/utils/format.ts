@@ -46,5 +46,5 @@ export function generateOrderId(date: Date = new Date()): string {
   const d = String(date.getDate()).padStart(2, "0");
   const h = String(date.getHours()).padStart(2, "0");
   const mi = String(date.getMinutes()).padStart(2, "0");
-  return `F&F-${y}-${mo}${d}-${h}${mi}`;
+  return `DESIRE-${y}-${mo}${d}-${h}${mi}`;
 }

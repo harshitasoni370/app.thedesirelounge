@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { HomePage } from "@/pages/HomePage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
 import { CategoryLandingPage } from "@/pages/CategoryLandingPage";
@@ -17,9 +17,12 @@ import { ProfilePage } from "@/pages/ProfilePage";
  * since they're only ever reached by clicking through from the app.
  */
 export function AppRoutes() {
+  const location = useLocation();
+  const hasQrParams = new URLSearchParams(location.search).has("type");
+
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={hasQrParams ? <Navigate to={`/categories${location.search}`} replace /> : <HomePage />} />
       <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/category" element={<CategoryLandingPage />} />
       <Route path="/menu" element={<MenuPage />} />
