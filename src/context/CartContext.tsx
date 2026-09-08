@@ -93,6 +93,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       branchId: session.branchId,
       menuItemId: product.id,
       quantity: existing ? existing.qty + qty : qty,
+      tableSessionId: session.sessionId,
     })
       .then(({ cartId: newCartId, cartItemId }) => {
         if (newCartId && newCartId !== cartId) persistCartId(newCartId);

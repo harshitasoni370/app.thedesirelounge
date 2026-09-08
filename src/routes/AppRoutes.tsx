@@ -18,7 +18,9 @@ import { ProfilePage } from "@/pages/ProfilePage";
  */
 export function AppRoutes() {
   const location = useLocation();
-  const hasQrParams = new URLSearchParams(location.search).has("type");
+  const params = new URLSearchParams(location.search);
+  const hasQrParams = params.has("type") || ["companyId", "branchId", "tableId", "sessionId"]
+    .every((key) => params.has(key));
 
   return (
     <Routes>

@@ -23,10 +23,38 @@ export const fetchQrContext = createAsyncThunk(
   async (search: string, { signal, rejectWithValue }) => {
     const searchParams = new URLSearchParams(search);
     const params = Object.fromEntries(searchParams.entries());
-    if (!QR_CONTEXT_PARAMS.some((key) => params[key])) return null;
+    const forwardedKeys = ["companyId", "branchId", "tableId", "sessionId"];
+    const hasForwardedContext = forwardedKeys.every((key) => params[key]);
+    if (!QR_CONTEXT_PARAMS.some((key) => params[key]) && !hasForwardedContext) return null;
 
     const pending = { params, data: null, fetchedAt: null };
     sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(pending));
+
+    // The lounge site forwards the resolved QR response to this app. Use it
+    // directly instead of sending response fields back to the QR endpoint.
+    if (hasForwardedContext) {
+      const data = Object.fromEntries(
+        [
+          "companyId",
+          "uidCompanyId",
+          "branchId",
+          "uidBranchId",
+          "tableId",
+          "uidTableId",
+          "companyName",
+          "branchName",
+          "tableName",
+          "tableNumber",
+          "tableNo",
+          "sessionId",
+        ]
+          .filter((key) => params[key])
+          .map((key) => [key, params[key]])
+      );
+      const context = { params, data, fetchedAt: new Date().toISOString() };
+      sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(context));
+      return context;
+    }
 
     try {
       const response = await axios.get(URLS.api.qrContext, {

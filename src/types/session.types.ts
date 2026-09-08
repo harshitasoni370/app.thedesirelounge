@@ -3,16 +3,20 @@
  * scans at their table: which company/outlet, which branch, and which
  * table they're sitting at.
  *
- * Currently captured from static config (see src/config/staticSession.ts)
- * when the guest taps "Explore Menu", not from a real QR-scan URL yet.
+ * Captured from the QR context response. Static config is retained only as
+ * a fallback for opening the menu without QR query parameters.
  */
 export interface DiningSession {
   companyId: string | null;
+  companyName: string | null;
   branchId: string | null;
+  branchName: string | null;
   /** GUID for the physical table — sent to the Reservation API. */
   tableId: string | null;
   /** Human-readable table label shown in the UI (e.g. "1", "12A"). */
   tableNumber: string | null;
+  tableName: string | null;
+  sessionId: string | null;
   /** Raw querystring the session was captured from, kept for debugging. */
   capturedFrom?: string;
   /** ISO timestamp of when this session was captured/updated. */
@@ -21,8 +25,12 @@ export interface DiningSession {
 
 export const EMPTY_SESSION: DiningSession = {
   companyId: null,
+  companyName: null,
   branchId: null,
+  branchName: null,
   tableId: null,
   tableNumber: null,
+  tableName: null,
+  sessionId: null,
   updatedAt: new Date(0).toISOString(),
 };

@@ -24,9 +24,13 @@ export async function addCartItem(params: {
   branchId: string;
   menuItemId: string;
   quantity: number;
+  tableSessionId: string | null;
 }): Promise<AddCartResult> {
-  const payload: AddCartRequest = params;
-  const res = await apiClient.post("/Cart/addcart", payload);
+  const { tableSessionId, ...cartParams } = params;
+  const payload: AddCartRequest = cartParams;
+  const res = await apiClient.post("/Cart/addcart", payload, {
+    headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
+  });
   assertApiSuccess(res.data);
 
   const cartId = extractCartId(res.data);

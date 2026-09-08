@@ -8,7 +8,7 @@ import { URLS } from "@/config/urls";
  */
 const baseURL = URLS.api.base;
 
-if (!import.meta.env.VITE_API_BASE_URL) {
+if (!import.meta.env.VITE_API_BASE_URL && !import.meta.env.DEV) {
   // Without this, axios silently falls back to relative URLs (i.e. hits
   // the dev server itself instead of the real API), which just looks
   // like "nothing works" with no clear error pointing at the cause.

@@ -9,7 +9,6 @@ import { SessionGate } from "@/components/layout/SessionGate";
 import { useSession } from "@/context/SessionContext";
 import { useCategories } from "@/hooks/useCategories";
 import { useMenuItems } from "@/hooks/useMenuItems";
-import { SessionDetails } from "@/components/layout/SessionDetails";
 
 type VegFilter = "veg" | "nonveg";
 
@@ -105,8 +104,8 @@ function MenuContent({ subcategoryId, categoryId }: { subcategoryId: string; cat
 
       <div id="product-grid" className="menu-grid">
         {visibleItems.length === 0 && <p className="menu-grid__empty">No items in this selection.</p>}
-        {visibleItems.map((product) => (
-          <ProductCard key={product.id} product={product} />
+        {visibleItems.map((product, index) => (
+          <ProductCard key={product.id} product={product} priority={index < 4} />
         ))}
       </div>
 
@@ -150,7 +149,6 @@ export function MenuPage() {
   return (
     <main className="page menu-page">
       <Header />
-      <SessionDetails />
       <MenuBack to="/categories" label="Back to Categories" />
       <SessionGate>
         <MenuContent subcategoryId={subcategoryId} categoryId={((location.state as LocationState) || {}).categoryId} />

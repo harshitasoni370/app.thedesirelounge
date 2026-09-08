@@ -4,10 +4,13 @@ export function SessionDetails() {
   const { session } = useSession();
   const params = new URLSearchParams(session.capturedFrom?.split("?")[1] || "");
   const details = [
-    ["Table", session.tableNumber || params.get("name")],
+    ["Company", session.companyName],
     ["Table ID", session.tableId],
+    ["Table", session.tableName || session.tableNumber || params.get("name")],
+    ["Branch", session.branchName],
     ["Company ID", session.companyId],
     ["Branch ID", session.branchId],
+    ["Session ID", session.sessionId],
     ["Location", params.get("location")],
   ].filter(([, value]) => value);
 

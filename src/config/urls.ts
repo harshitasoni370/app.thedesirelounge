@@ -10,7 +10,8 @@ const defaults = {
   },
 }[environment];
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || defaults.apiBaseUrl;
+// Use Vite's same-origin proxy during local development to avoid browser CORS.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : defaults.apiBaseUrl);
 
 export const URLS = {
   api: {

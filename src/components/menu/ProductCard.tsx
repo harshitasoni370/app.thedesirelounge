@@ -5,7 +5,7 @@ import type { MenuItem } from "@/types/menu.types";
 import staticImage from "@/assets/images/staticimage.jpg";
 import { getImageUrl } from "@/utils/imageUrl";
 
-export function ProductCard({ product }: { product: MenuItem }) {
+export function ProductCard({ product, priority = false }: { product: MenuItem; priority?: boolean }) {
   const { addToCart } = useCart();
   const { showToast } = useToast();
 
@@ -14,12 +14,24 @@ export function ProductCard({ product }: { product: MenuItem }) {
     showToast(`${product.name} added to cart`);
   };
 
-  const Image =getImageUrl(product.image)
+  const imageSrc = getImageUrl(product.image) || staticImage;
 
   return (
     <article className="menu-card" data-product={product.id}>
       <div className="menu-card__media">
-       <img src={product.image === null ? staticImage : Image} alt={product.name} loading="lazy" width={400} height={300} />
+        <img
+          src={imageSrc}
+          alt={product.name}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          width={400}
+          height={300}
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = staticImage;
+          }}
+        />
       </div>
       <div className="menu-card__body">
         <h3 className="menu-card__name">{product.name}</h3>

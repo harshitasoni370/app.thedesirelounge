@@ -70,6 +70,7 @@ export function CheckoutPage() {
 
     try {
       const result = await placeOrderApi({
+        sessionId: session.sessionId,
         cartId,
         firstName: firstName || "Guest",
         lastName: rest.join(" ") || "",
@@ -77,6 +78,8 @@ export function CheckoutPage() {
         mobile: checkout.phone,
         dob: checkout.dob,
         guestCount: Number(checkout.people) || 1,
+        companyId: session.companyId,
+        branchId: session.branchId,
       });
       orderId = result.orderId;
       orderNo = result.orderNo;

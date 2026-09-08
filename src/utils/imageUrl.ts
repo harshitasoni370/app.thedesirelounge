@@ -17,9 +17,9 @@
  * setups that only have the API URL configured.
  */
 
-const IMAGE_BASE_URL: string =
-  import.meta.env.VITE_IMAGE_BASE_URL ||
-  (import.meta.env.VITE_API_BASE_URL).replace(/\/api\/?$/i, "");
+import { URLS } from "@/config/urls";
+
+const IMAGE_BASE_URL: string = import.meta.env.VITE_IMAGE_BASE_URL || URLS.api.imageBase;
 
 export function getImageUrl(path?: string | null): string | undefined {
   if (!path) return undefined;

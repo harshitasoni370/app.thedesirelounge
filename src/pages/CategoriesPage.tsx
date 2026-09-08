@@ -6,7 +6,6 @@ import { SessionGate } from "@/components/layout/SessionGate";
 import { useSession } from "@/context/SessionContext";
 import { useCategories } from "@/hooks/useCategories";
 import { getImageUrl } from "@/utils/imageUrl";
-import { SessionDetails } from "@/components/layout/SessionDetails";
 
 
 /**
@@ -120,7 +119,6 @@ export function CategoriesPage() {
   return (
     <main className="page">
       <Header />
-      <SessionDetails />
       <SessionGate>
         <CategoriesContent />
       </SessionGate>

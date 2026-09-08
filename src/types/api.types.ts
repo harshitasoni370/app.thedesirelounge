@@ -216,6 +216,7 @@ export interface CartApiRecord {
  *
  */
 export interface PlaceOrderRequest {
+  sessionId: string | null;
   cartId: string;
   firstName: string;
   lastName: string;
@@ -223,6 +224,8 @@ export interface PlaceOrderRequest {
   mobile: string;
   dob?: string;
   guestCount: number;
+  companyId: string | null;
+  branchId: string | null;
 }
 
 export interface OrderApiRecord {
@@ -296,14 +299,20 @@ export interface CustomerRecord {
 export interface CreateReservationRequest {
   companyId: string;
   branchId: string;
-  tableId: string | null;
+  reservationCategory: string;
   guestName: string;
   mobile: string;
-  email?: string;
+  dateOfBirth?: string;
   guestCount: number;
   /** ISO 8601 datetime, e.g. "2026-08-20T08:30:00Z". */
   reservationDateTime: string;
   specialRequest?: string;
+}
+
+export interface CreateTableSessionRequest {
+  companyId: string;
+  branchId: string;
+  tableId: string;
 }
 
 export interface ReservationApiRecord {

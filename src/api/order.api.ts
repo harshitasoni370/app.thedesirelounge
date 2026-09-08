@@ -18,7 +18,9 @@ export interface PlaceOrderResult {
  * Confirmed response: { data: { orderId, orderNo } }.
  */
 export async function placeOrder(payload: PlaceOrderRequest): Promise<PlaceOrderResult> {
-  const res = await apiClient.post("/Order/order", payload);
+  const res = await apiClient.post("/Order/order", payload, {
+    headers: payload.sessionId ? { "Table-Session-Id": payload.sessionId } : undefined,
+  });
   const data = (res.data as { data?: { orderId?: string; orderNo?: string } } | null)?.data;
   return {
     orderId: data?.orderId ?? extractOrderId(res.data),
