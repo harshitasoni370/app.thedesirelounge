@@ -60,9 +60,9 @@ export function ConfirmPage() {
   if (reservation) {
     return (
       <main className="page">
-        <Header />
+        {/* <Header /> */}
         <div className="confirm confirm--bg">
-          <Stepper active="confirmation" />
+          {/* <Stepper active="confirmation" /> */}
           <section className="confirm__panel" aria-labelledby="reservation-confirm-title">
             <h1 id="reservation-confirm-title" className="confirm__title">Reservation Confirmed!</h1>
             <p className="confirm__thanks">Thank you for choosing Desire Sheesha Lounge.</p>
