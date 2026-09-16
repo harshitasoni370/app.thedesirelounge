@@ -208,7 +208,7 @@ export interface CartApiRecord {
 /* ------------------------------ Order -------------------------------- */
 
 /**
- * POST /Cart/order — matches the Postman collection's payload shape.
+ * POST /Order/order — matches the Postman collection's payload shape.
  * cartId identifies the cart being converted into an order.
  * NOTE: the API's field is capitalized "CountryCode" (not
  * "countryCode") — matched exactly here since it's a literal wire
@@ -307,6 +307,11 @@ export interface CreateReservationRequest {
   /** ISO 8601 datetime, e.g. "2026-08-20T08:30:00Z". */
   reservationDateTime: string;
   specialRequest?: string;
+  email?: string;
+  reservationTitle?: string | null;
+  tableId?: string;
+  moduleId?: string;
+  extraDetails?: Record<string, unknown> | null;
 }
 
 export interface CreateTableSessionRequest {
@@ -318,6 +323,10 @@ export interface CreateTableSessionRequest {
 export interface ReservationApiRecord {
   reservationId?: string;
   uidReservationId?: string;
+  reservationNo?: string;
+  moduleId?: string;
+  moduleName?: string;
+  tableName?: string;
   id?: string;
   [key: string]: unknown;
 }

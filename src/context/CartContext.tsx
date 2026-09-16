@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { readLocal, writeLocal } from "@/utils/storage";
 import { addCartItem, getCartItems, removeCartItem, updateCartQuantity } from "@/api/cart.api";
 import { useSession } from "@/context/SessionContext";
@@ -36,8 +37,17 @@ const CartContext = createContext<CartContextValue | undefined>(undefined);
  */
 export function CartProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
+  const location = useLocation();
   const [items, setItems] = useState<CartItem[]>(() => readLocal(CART_KEY, [] as CartItem[]));
   const [cartId, setCartId] = useState<string | null>(() => readLocal(CART_ID_KEY, null as string | null));
+
+  useEffect(() => {
+    const urlCartId = new URLSearchParams(location.search).get("cartId");
+    if (urlCartId && urlCartId !== cartId) {
+      persistItems([]);
+      persistCartId(urlCartId);
+    }
+  }, [cartId, location.search]);
 
   const persistItems = (next: CartItem[]) => {
     setItems(next);
@@ -54,7 +64,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!cartId || items.length > 0) return;
     let cancelled = false;
-    getCartItems(cartId)
+    getCartItems(cartId, session.sessionId)
       .then((serverItems) => {
         if (!cancelled && serverItems.length > 0) persistItems(serverItems);
       })
@@ -63,7 +73,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartId]);
+  }, [cartId, session.sessionId]);
 
   const addToCart = (product: MenuItem, qty = 1) => {
     const existing = items.find((i) => i.id === product.id);

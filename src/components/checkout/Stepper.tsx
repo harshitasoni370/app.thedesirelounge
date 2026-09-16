@@ -2,9 +2,12 @@ import { NavIcon } from "@/components/ui/Icon";
 
 interface StepperProps {
   active: "details" | "confirmation";
+  hidden?: boolean;
 }
 
-export function Stepper({ active }: StepperProps) {
+export function Stepper({ active, hidden = false }: StepperProps) {
+  if (hidden) return null;
+
   return (
     <ol className="stepper" aria-label="Checkout progress">
       <li className="stepper__item is-done">

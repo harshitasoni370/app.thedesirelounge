@@ -7,12 +7,16 @@ import { useCart } from "@/context/CartContext";
 import { useSession } from "@/context/SessionContext";
 import { useToast } from "@/context/ToastContext";
 import { generateOrderId } from "@/utils/format";
-import { writeSession } from "@/utils/storage";
+import { writeLocal } from "@/utils/storage";
 import { placeOrder as placeOrderApi } from "@/api/order.api";
+import { createReservation } from "@/api/reservation.api";
 import type { CheckoutInfo, GuestType, PlacedOrder } from "@/types/cart.types";
+import type { ReservationApiRecord } from "@/types/api.types";
 import { getCustomerByMobile } from "@/api/customer.api";
+import { useLocation } from "react-router-dom";
 
 const ORDER_KEY = "ff_last_order_v1";
+const RESERVATION_KEY = "ff_last_reservation_v1";
 
 function isValidPhone(phone: string, countryCode: string): boolean {
   const digits = phone.replace(/\D/g, "");
@@ -21,36 +25,320 @@ function isValidPhone(phone: string, countryCode: string): boolean {
   return digits.length >= 7 && digits.length <= 10;
 }
 
+function isGuid(value: string | null | undefined): value is string {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
+}
+
 export function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { items, count, total, cartId, clearCart } = useCart();
   const { session, setTableNumber } = useSession();
   const { showToast } = useToast();
+  const checkoutParams = new URLSearchParams(location.search);
+  const reservationCompanyId = checkoutParams.get("companyId") || session.companyId || "0ffbe39e-abf8-4827-9107-1a04b39f3416";
+  const reservationBranchId = checkoutParams.get("branchId") || session.branchId || "f4fb1d76-83a0-4965-86b5-63da28249dae";
+  const reservationSessionId = checkoutParams.get("tableSessionId") || checkoutParams.get("sessionId") || session.sessionId;
+  const reservationModuleId = checkoutParams.get("moduleId") || "3e340f23-d842-47f0-98e8-b0d458dc22dd";
+  const isSessionReservation = Boolean(
+    checkoutParams.get("gameName") ||
+    (checkoutParams.get("bookingType") && checkoutParams.get("bookingType") !== "Table Reservation") ||
+    checkoutParams.get("reservationCategory") === "EVENT" ||
+    checkoutParams.get("reservationCategory") === "OFFER" ||
+    checkoutParams.get("reservationCategory") === "EXCLUSIVE_OFFER" ||
+    checkoutParams.get("reservationCategory") === "CUSTOM_MOMENT"
+  );
+  const isCustomMomentReservation = checkoutParams.get("bookingType") === "Custom Moment" || Boolean(checkoutParams.get("momentId"));
+  const isLiveSportsReservation = !isCustomMomentReservation && (checkoutParams.get("reservationCategory") === "EVENT" || checkoutParams.get("category") === "EVENT");
+  const isOfferReservation = checkoutParams.get("reservationCategory") === "OFFER" || checkoutParams.get("reservationCategory") === "EXCLUSIVE_OFFER";
+  const isTableReservation = checkoutParams.get("reservationCategory") === "TABLE_RESERVATION" || checkoutParams.get("category") === "TABLE_RESERVATION";
+  const isReservationCheckout = isSessionReservation || isTableReservation;
+  const hasDirectCart = Boolean(checkoutParams.get("cartId"));
+  const hideSteps = checkoutParams.get("hideSteps") === "true" || isReservationCheckout;
+  const urlName = checkoutParams.get("guestName") || checkoutParams.get("customerName") || "";
+  const urlPhone = checkoutParams.get("mobile") || checkoutParams.get("phone") || "";
+  const urlCountryCode = checkoutParams.get("countryCode") || checkoutParams.get("CountryCode") || "+971";
+  const urlPeople = checkoutParams.get("guestCount") || checkoutParams.get("people") || "";
+  const urlDob = checkoutParams.get("dob") || checkoutParams.get("dateOfBirth") || "";
+  const urlEmail = checkoutParams.get("email") || "";
+  const urlReservationDate = checkoutParams.get("dateStart") || "";
+  const urlMomentName = checkoutParams.get("momentName") || checkoutParams.get("eventName") || checkoutParams.get("event") || "";
+  const urlMomentId = checkoutParams.get("momentId") || "";
+  const urlMomentPrice = checkoutParams.get("price") || "";
+  const urlGameName = checkoutParams.get("gameName") || "";
+  const urlGameId = checkoutParams.get("gameId") || "";
+  const urlOfferId = checkoutParams.get("offerId") || "";
+  const urlOfferName = checkoutParams.get("offerName") || "";
+  const urlOfferDescription = checkoutParams.get("offerDescription") || "";
+  const urlOfferPrice = checkoutParams.get("offerPrice") || "";
+  const isReturningGuest = [
+    checkoutParams.get("guestType"),
+    checkoutParams.get("customerType"),
+  ].some((value) => value?.toLowerCase() === "returning") || checkoutParams.get("returning") === "true";
+  const reservationReturnTo = checkoutParams.get("returnTo") || (isOfferReservation ? "/offers" : "/categories");
+  const liveSportsDetails = isLiveSportsReservation
+    ? [
+        ["Sport", checkoutParams.get("sportCategory") || checkoutParams.get("sport")],
+        ["Event", checkoutParams.get("eventName") || checkoutParams.get("event")],
+        ["Competition", checkoutParams.get("competitionName")],
+        ["Teams", [checkoutParams.get("teamHome"), checkoutParams.get("teamAway")].filter(Boolean).join(" vs ")],
+        ["Venue", checkoutParams.get("venue")],
+        ["Date", checkoutParams.get("dateStart")],
+        ["UAE time", checkoutParams.get("uaeTime")],
+        ["Channel", checkoutParams.get("channel")],
+      ].filter(([, value]) => value) as Array<[string, string]>
+    : [];
+  const urlTable =
+    checkoutParams.get("tableNumber") ||
+    checkoutParams.get("tableNo") ||
+    checkoutParams.get("tableName") ||
+    checkoutParams.get("name") ||
+    "";
+  const selectedDetails: Array<[string, string]> = !isTableReservation && isCustomMomentReservation
+    ? [["Type", "Custom Moment"], ["Name", urlMomentName], ["Price", urlMomentPrice ? `AED ${urlMomentPrice}` : ""]]
+    : !isTableReservation && urlGameName
+      ? [["Type", checkoutParams.get("categoryName") || "Gaming Session"], ["Game", urlGameName], ["Players", checkoutParams.get("players") || ""], ["Duration", checkoutParams.get("duration") || ""], ["Difficulty", checkoutParams.get("difficulty") || ""]]
+      : !isTableReservation && isOfferReservation
+        ? [["Type", "Exclusive Offer"], ["Offer", urlOfferName], ["Price", urlOfferPrice]]
+        : !isTableReservation && checkoutParams.get("bookingType")
+          ? [["Type", checkoutParams.get("bookingType") || "Reservation"], ["Name", checkoutParams.get("eventName") || checkoutParams.get("reservationTitle") || ""], ["Price", urlMomentPrice ? `AED ${urlMomentPrice}` : ""]]
+        : [];
 
-  const [guestType, setGuestType] = useState<GuestType>("new");
+  const [guestType, setGuestType] = useState<GuestType>(isReturningGuest ? "returning" : "new");
 
   // New guest fields
-  const [name, setName] = useState("");
-  const [countryCode, setCountryCode] = useState("+971");
-  const [phone, setPhone] = useState("");
-  const [people, setPeople] = useState("");
-  const [table, setTable] = useState(session.tableNumber || "");
-  const [dob, setDob] = useState("");
+  const [name, setName] = useState(urlName);
+  const [countryCode, setCountryCode] = useState(urlCountryCode);
+  const [phone, setPhone] = useState(urlPhone);
+  const [people, setPeople] = useState(urlPeople);
+  const [table, setTable] = useState(urlTable || session.tableNumber || "");
+  const [dob, setDob] = useState(urlDob);
+  const [email, setEmail] = useState(urlEmail);
+  const [reservationDate, setReservationDate] = useState(urlReservationDate);
+  const [reservationTime, setReservationTime] = useState("");
+  const [specialRequest, setSpecialRequest] = useState("");
+  const [momentName, setMomentName] = useState(urlMomentName);
 
   // Returning guest fields (OTP removed - phone + table only)
-  const [phoneReturn, setPhoneReturn] = useState("");
-  const [tableReturn, setTableReturn] = useState(session.tableNumber || "");
+  const [phoneReturn, setPhoneReturn] = useState(urlPhone);
+  const [tableReturn, setTableReturn] = useState(urlTable || session.tableNumber || "");
   const [isLookingUpGuest, setIsLookingUpGuest] = useState(false);
+  const [returningCustomer, setReturningCustomer] = useState<Awaited<ReturnType<typeof getCustomerByMobile>>>(null);
+  const [lookedUpMobile, setLookedUpMobile] = useState("");
+
+  const saveReservationConfirmation = (record: ReservationApiRecord | null, checkout: CheckoutInfo, title: string) => {
+    writeLocal(ORDER_KEY, null);
+    writeLocal(RESERVATION_KEY, {
+      reservationNo: record?.reservationNo || record?.reservationId || record?.uidReservationId || record?.id || null,
+      moduleId: record?.moduleId || reservationModuleId,
+      moduleName: record?.moduleName || title,
+      tableName: record?.tableName || checkout.table || session.tableName || session.tableNumber || null,
+      createdAt: new Date().toISOString(),
+      reservationTitle: title,
+      reservationCategory: checkoutParams.get("reservationCategory") || "RESERVATION",
+      returnTo: reservationReturnTo,
+      reservationDateTime: `${reservationDate}T${reservationTime}:00+04:00`,
+      guestName: checkout.name || "Guest",
+      countryCode: checkout.countryCode,
+      mobile: checkout.phone,
+    });
+  };
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !isReservationCheckout && !hasDirectCart) {
       showToast("Add something delicious first");
       navigate("/categories");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasDirectCart, isReservationCheckout]);
+
+  useEffect(() => {
+    const mobile = phoneReturn.replace(/\D/g, "");
+    setReturningCustomer(null);
+    setLookedUpMobile("");
+
+    if (guestType !== "returning" || !session.companyId || !isValidPhone(mobile, countryCode)) return;
+
+    let cancelled = false;
+    setIsLookingUpGuest(true);
+    getCustomerByMobile({ countryCode, mobile, companyId: session.companyId })
+      .then((customer) => {
+        if (cancelled) return;
+        setReturningCustomer(customer);
+        setLookedUpMobile(mobile);
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Could not look up returning guest", error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLookingUpGuest(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode, guestType, phoneReturn, session.companyId]);
 
   const placeOrder = async (checkout: CheckoutInfo) => {
+    if (isOfferReservation) {
+      if (!urlOfferId || !urlOfferName) {
+        showToast("The selected offer is no longer available");
+        navigate("/offers");
+        return;
+      }
+      if (!reservationDate || !reservationTime) {
+        showToast("Select the offer reservation date and time");
+        return;
+      }
+
+      try {
+        const tableId = isGuid(session.tableId) ? session.tableId : checkoutParams.get("tableId");
+        const reservation = await createReservation({
+          companyId: reservationCompanyId,
+          branchId: reservationBranchId,
+          moduleId: reservationModuleId,
+          reservationCategory: "OFFER",
+          guestName: checkout.name || "Guest",
+          mobile: checkout.phone,
+          email,
+          dateOfBirth: checkout.dob || "",
+          guestCount: Number(checkout.people) || 1,
+          reservationDateTime: `${reservationDate}T${reservationTime}:00+04:00`,
+          reservationTitle: urlOfferName,
+          ...(isGuid(tableId) ? { tableId } : {}),
+          specialRequest,
+          extraDetails: {
+            id: urlOfferId,
+            name: urlOfferName,
+          },
+        }, reservationSessionId);
+        saveReservationConfirmation(reservation, checkout, urlOfferName);
+        showToast("Offer reservation submitted successfully");
+        navigate("/confirm");
+      } catch (error) {
+        console.error("Could not create offer reservation", error);
+        showToast("Could not submit reservation. Please try again later.");
+      }
+      return;
+    }
+
+    if (isCustomMomentReservation) {
+      if (!reservationDate || !reservationTime) {
+        showToast("Select the moment reservation date and time");
+        return;
+      }
+
+      try {
+        const tableId = isGuid(session.tableId) ? session.tableId : checkoutParams.get("tableId");
+        const reservation = await createReservation({
+          companyId: reservationCompanyId,
+          branchId: reservationBranchId,
+          moduleId: reservationModuleId,
+          reservationCategory: "CUSTOM_MOMENT",
+          guestName: checkout.name || "Guest",
+          mobile: checkout.phone,
+          email,
+          dateOfBirth: checkout.dob || "",
+          guestCount: Number(checkout.people) || 1,
+          reservationDateTime: `${reservationDate}T${reservationTime}:00+04:00`,
+          reservationTitle: momentName || "Custom Moment",
+          ...(isGuid(tableId) ? { tableId } : {}),
+          specialRequest,
+          extraDetails: {
+            id: urlMomentId,
+            name: momentName,
+          },
+        }, reservationSessionId);
+        saveReservationConfirmation(reservation, checkout, momentName || "Custom Moment");
+        showToast("Custom moment reservation submitted successfully");
+        navigate("/confirm");
+      } catch (error) {
+        console.error("Could not create custom moment reservation", error);
+        showToast("Could not submit reservation. Please try again later.");
+      }
+      return;
+    }
+
+    if (isLiveSportsReservation) {
+      if (!reservationDate || !reservationTime) {
+        showToast("Select the match reservation date and time");
+        return;
+      }
+
+      try {
+        const tableId = isGuid(session.tableId) ? session.tableId : checkoutParams.get("tableId");
+        const reservation = await createReservation({
+          companyId: reservationCompanyId,
+          branchId: reservationBranchId,
+          reservationCategory: "EVENT",
+          guestName: checkout.name || "Guest",
+          mobile: checkout.phone,
+          email,
+          dateOfBirth: checkout.dob || "",
+          guestCount: Number(checkout.people) || 1,
+          reservationDateTime: `${reservationDate}T${reservationTime}:00+04:00`,
+          reservationTitle: null,
+          ...(isGuid(tableId) ? { tableId } : {}),
+          moduleId: reservationModuleId,
+          specialRequest,
+          extraDetails: {
+            id: urlMomentId || checkoutParams.get("eventId") || "",
+            name: momentName,
+          },
+        }, reservationSessionId);
+        saveReservationConfirmation(reservation, checkout, momentName || "Live Sports Reservation");
+        showToast("Reservation submitted successfully");
+        navigate("/confirm");
+      } catch (error) {
+        console.error("Could not create Live Sports reservation", error);
+        showToast("Could not submit reservation. Please try again later.");
+      }
+      return;
+    }
+
+    // Table, gaming, package, event, and custom bookings all use the reservation API.
+    if (isReservationCheckout) {
+      if (!reservationDate || !reservationTime) {
+        showToast("Select the reservation date and time");
+        return;
+      }
+
+      const tableId = isGuid(session.tableId) ? session.tableId : checkoutParams.get("tableId");
+      const reservationCategory = checkoutParams.get("reservationCategory") || (urlGameName ? "GAMING" : "TABLE_RESERVATION");
+      const reservationTitle = urlGameName
+        ? `Gaming: ${urlGameName}`
+        : checkoutParams.get("reservationTitle") || checkoutParams.get("bookingType") || (isTableReservation ? "Table Reservation" : "Reservation");
+
+      try {
+        const reservation = await createReservation({
+          companyId: reservationCompanyId,
+          branchId: reservationBranchId,
+          moduleId: reservationModuleId,
+          reservationCategory,
+          guestName: checkout.name || "Guest",
+          mobile: checkout.phone,
+          email,
+          dateOfBirth: checkout.dob || "",
+          guestCount: Number(checkout.people) || 1,
+          reservationDateTime: `${reservationDate}T${reservationTime}:00+04:00`,
+          reservationTitle,
+          ...(isGuid(tableId) ? { tableId } : {}),
+          specialRequest,
+          extraDetails: {
+            id: urlGameId || checkoutParams.get("eventId") || "",
+            name: urlGameName || reservationTitle,
+          },
+        }, reservationSessionId);
+        saveReservationConfirmation(reservation, checkout, reservationTitle);
+        showToast(`${reservationTitle} reservation submitted successfully`);
+        navigate("/confirm");
+      } catch (error) {
+        console.error("Could not create reservation", error);
+        showToast("Could not submit reservation. Please try again later.");
+      }
+      return;
+    }
+
     if (items.length === 0) {
       showToast("Your cart is empty");
       navigate("/categories");
@@ -64,6 +352,7 @@ export function CheckoutPage() {
     }
 
     const now = new Date();
+    writeLocal(RESERVATION_KEY, null);
     const [firstName, ...rest] = (checkout.name || "Guest").trim().split(" ");
     let orderId: string | null = null;
     let orderNo: string | null = null;
@@ -85,7 +374,7 @@ export function CheckoutPage() {
       orderNo = result.orderNo;
     } catch (err) {
       console.error("Could not place order via API", err);
-      showToast("Could not place your order — please try again");
+      showToast("Could not place order. Please try again later.");
       return;
     }
 
@@ -106,7 +395,7 @@ export function CheckoutPage() {
       cartId,
     };
 
-    writeSession(ORDER_KEY, order);
+    writeLocal(ORDER_KEY, order);
     if (checkout.table) setTableNumber(checkout.table);
 
     clearCart();
@@ -129,7 +418,11 @@ export function CheckoutPage() {
         showToast("Select number of guests");
         return;
       }
-      if (!table.trim()) {
+      if (isReservationCheckout && (!reservationDate || !reservationTime)) {
+        showToast("Select the reservation date and time");
+        return;
+      }
+      if (!isLiveSportsReservation && !table.trim() && !checkoutParams.get("tableId") && !session.tableId) {
         showToast("Enter your table number");
         return;
       }
@@ -139,7 +432,7 @@ export function CheckoutPage() {
         countryCode,
         phone,
         people,
-        table: table.trim(),
+        table: isLiveSportsReservation ? "" : table.trim(),
         dob: dob || undefined,
         orderType: "dine-in",
         payment: "cod",
@@ -149,8 +442,12 @@ export function CheckoutPage() {
         showToast("Enter a valid mobile number");
         return;
       }
-      if (!tableReturn.trim()) {
+      if (!tableReturn.trim() && !isReservationCheckout) {
         showToast("Enter your table number");
+        return;
+      }
+      if (isReservationCheckout && (!reservationDate || !reservationTime)) {
+        showToast("Select the reservation date and time");
         return;
       }
       if (!session.companyId) {
@@ -167,18 +464,18 @@ export function CheckoutPage() {
   const handleReturningGuestSubmit = async () => {
     setIsLookingUpGuest(true);
     try {
-      const customer = await getCustomerByMobile({
-        countryCode,
-        mobile: phoneReturn,
-        companyId: session.companyId!,
-      });
+      const mobile = phoneReturn.replace(/\D/g, "");
+      const customer =
+        lookedUpMobile === mobile
+          ? returningCustomer
+          : await getCustomerByMobile({ countryCode, mobile, companyId: session.companyId! });
 
       if (!customer) {
         showToast("No account found for this number — try 'New Here' instead");
         return;
       }
 
-      placeOrder({
+      await placeOrder({
         guestType: "returning",
         name: `${customer.firstName} ${customer.lastName}`.trim() || "Guest",
         countryCode,
@@ -202,7 +499,7 @@ export function CheckoutPage() {
       <Header />
 
       <div className="checkout checkout--bg">
-        <Stepper active="details" />
+        <Stepper active="details" hidden={hideSteps} />
 
         <header className="checkout__intro">
           <p className="checkout__eyebrow">Tell us a little</p>
@@ -211,7 +508,58 @@ export function CheckoutPage() {
           <span className="checkout__ornament" aria-hidden="true" />
         </header>
 
-        <div className="guest-toggle" role="group" aria-label="Guest type">
+        {isLiveSportsReservation && !isCustomMomentReservation && liveSportsDetails.length > 0 && (
+          <section className="checkout-event-details" aria-label="Selected live sports fixture">
+            <p className="checkout__eyebrow">Selected fixture</p>
+            <div className="checkout-event-details__grid">
+              {liveSportsDetails.map(([label, value]) => (
+                <div className="checkout-event-details__item" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {selectedDetails.length > 0 && (
+          <section className="checkout-event-details" aria-label="Selected booking details">
+            <p className="checkout__eyebrow">Selected booking</p>
+            <div className="checkout-event-details__grid">
+              {selectedDetails.filter(([, value]) => value).map(([label, value]) => (
+                <div className="checkout-event-details__item" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {isCustomMomentReservation && (
+          <div className="form-group checkout-event-details" style={{ marginBottom: "1.5rem" }}>
+            <label className="form-label" htmlFor="input-moment-name">Selected Moment</label>
+            <input
+              id="input-moment-name"
+              className="form-input"
+              type="text"
+              value={momentName}
+              onChange={(event) => setMomentName(event.target.value)}
+              required
+            />
+          </div>
+        )}
+
+        {isOfferReservation && (
+          <section className="checkout-event-details checkout-offer-summary" aria-label="Selected offer">
+            <p className="checkout__eyebrow">Selected offer</p>
+            <h2>{urlOfferName}</h2>
+            {urlOfferPrice && <strong>{urlOfferPrice}</strong>}
+            {urlOfferDescription && <p>{urlOfferDescription}</p>}
+          </section>
+        )}
+
+        {!isReturningGuest && <div className="guest-toggle" role="group" aria-label="Guest type">
           <button
             type="button"
             className={`guest-toggle__btn${guestType === "new" ? " is-active" : ""}`}
@@ -240,7 +588,7 @@ export function CheckoutPage() {
               <span className="guest-toggle__sub">I've ordered here before.</span>
             </span>
           </button>
-        </div>
+        </div>}
 
         <form className="form-panel form-panel--checkout" onSubmit={handleSubmit} noValidate>
           {guestType === "new" ? (
@@ -322,6 +670,15 @@ export function CheckoutPage() {
                 </div>
               </div>
 
+              {isReservationCheckout && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="input-email">Email</label>
+                  <div className="field-input">
+                    <input id="input-email" className="form-input" type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label" htmlFor="input-people">
                   Number of People
@@ -350,7 +707,30 @@ export function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="form-group">
+              {isReservationCheckout && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="input-reservation-date">Reservation Date</label>
+                    <div className="field-input">
+                      <input id="input-reservation-date" className="form-input" type="date" min={new Date().toISOString().split("T")[0]} value={reservationDate} onChange={(e) => setReservationDate(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="input-reservation-time">Reservation Time</label>
+                    <div className="field-input">
+                      <input id="input-reservation-time" className="form-input" type="time" value={reservationTime} onChange={(e) => setReservationTime(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="input-special-request">Special Request</label>
+                    <div className="field-input">
+                      <textarea id="input-special-request" className="form-input" placeholder="Any special request" value={specialRequest} onChange={(e) => setSpecialRequest(e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {!isLiveSportsReservation && <div className="form-group">
                 <label className="form-label" htmlFor="input-table">
                   Table Number
                 </label>
@@ -366,11 +746,11 @@ export function CheckoutPage() {
                     placeholder="Enter your table number"
                     value={table}
                     onChange={(e) => setTable(e.target.value)}
-                    required
+                    required={!session.tableId && !checkoutParams.get("tableId")}
                   />
                 </div>
                 <p className="form-help">You can find your table number on your table.</p>
-              </div>
+              </div>}
             </div>
           ) : (
             <div className="checkout-fields checkout-fields--stack">
@@ -427,11 +807,27 @@ export function CheckoutPage() {
                 </div>
                 <p className="form-help">You can find your table number on your table.</p>
               </div>
+              {isReservationCheckout && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="input-reservation-date-return">Reservation Date</label>
+                    <div className="field-input">
+                      <input id="input-reservation-date-return" className="form-input" type="date" min={new Date().toISOString().split("T")[0]} value={reservationDate} onChange={(e) => setReservationDate(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="input-reservation-time-return">Reservation Time</label>
+                    <div className="field-input">
+                      <input id="input-reservation-time-return" className="form-input" type="time" value={reservationTime} onChange={(e) => setReservationTime(e.target.value)} required />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           <button type="submit" className="btn btn-primary btn-block btn-checkout" disabled={isLookingUpGuest}>
-            {isLookingUpGuest ? "Checking…" : "Complete Your Order"}
+            {isLookingUpGuest ? "Checking…" : isOfferReservation ? "Reserve This Offer" : isReservationCheckout ? "Reserve Session" : "Complete Your Order"}
             <span aria-hidden="true">→</span>
           </button>
 

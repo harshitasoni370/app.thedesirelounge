@@ -58,8 +58,10 @@ export async function updateCartQuantity(cartId: string, cartItemId: string, qua
 }
 
 /** GET /Cart/getcartitems/{cartId} — used to re-hydrate the cart on page load. */
-export async function getCartItems(cartId: string): Promise<CartItem[]> {
-  const res = await apiClient.get(`/Cart/getcartitems/${cartId}`);
+export async function getCartItems(cartId: string, tableSessionId?: string | null): Promise<CartItem[]> {
+  const res = await apiClient.get(`/Cart/getcartitems/${cartId}`, {
+    headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
+  });
   assertApiSuccess(res.data);
   return extractCartItems(res.data);
 }

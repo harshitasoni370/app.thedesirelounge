@@ -13,8 +13,10 @@ import type { DiningSession } from "@/types/session.types";
  * needs to change, since every page reads from useSession().
  */
 export const STATIC_SESSION: Pick<DiningSession, "companyId" | "branchId" | "tableId" | "tableNumber"> = {
-  companyId: "28c5f656-294c-49a6-86f1-214be2fe6e6e",
-  branchId: "04ac2f31-17ef-4fc3-9053-9d64bee9a19e",
+  // companyId: "28c5f656-294c-49a6-86f1-214be2fe6e6e",
+  // branchId: "04ac2f31-17ef-4fc3-9053-9d64bee9a19e",
+   companyId: "0ffbe39e-abf8-4827-9107-1a04b39f3416",
+  branchId: "f4fb1d76-83a0-4965-86b5-63da28249dae",
   // Placeholder table GUID from the Postman collection — replace with
   // the real table's id once each table has its own QR code/id.
   tableId: "b9689df4-cb11-46f1-8207-c5fc46c22712",

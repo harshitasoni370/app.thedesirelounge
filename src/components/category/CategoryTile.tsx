@@ -27,8 +27,8 @@ export function CategoryTile({ name, href, image, variant = "default", state }: 
         src={image || placeholderDish}
         alt={name}
         className="category-item__image"
-        loading="eager"
-        fetchPriority="high"
+        loading="lazy"
+        fetchPriority="auto"
         decoding="async"
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).src = placeholderDish;

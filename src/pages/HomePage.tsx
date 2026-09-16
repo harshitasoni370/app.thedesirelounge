@@ -29,6 +29,9 @@ export function HomePage() {
               <path d="M11 5v14M13 5v14" strokeLinecap="round" />
             </svg>
           </Link>
+          <Link to="/offers" className="btn btn-outline hero-anim" onClick={captureSession}>
+            View Exclusive Offers
+          </Link>
         </div>
       </div>
     </main>

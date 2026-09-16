@@ -33,21 +33,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const qrContext = useAppSelector(selectQrContext);
   const urlParams = new URLSearchParams(location.search);
-  const hasForwardedContext = ["companyId", "branchId", "tableId", "sessionId"]
-    .every((key) => Boolean(urlParams.get(key)));
+  const readUrlParam = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = urlParams.get(key);
+      if (value) return value;
+    }
+    return null;
+  };
+  const companyId = readUrlParam("companyId", "companyID", "uidCompanyId");
+  const branchId = readUrlParam("branchId", "branchID", "uidBranchId");
+  const tableId = readUrlParam("tableId", "tableID", "uidTableId");
+  const sessionId = readUrlParam("sessionId", "tableSessionId", "Table-Session-Id");
+  const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
   const hasQrUrl = Boolean(urlParams.get("type")) || hasForwardedContext;
   const [session, setSession] = useState<DiningSession>(() => {
     if (!hasForwardedContext) return readLocal(SESSION_KEY, EMPTY_SESSION);
     return {
       ...EMPTY_SESSION,
-      companyId: urlParams.get("companyId"),
+      companyId,
       companyName: urlParams.get("companyName"),
-      branchId: urlParams.get("branchId"),
+      branchId,
       branchName: urlParams.get("branchName"),
-      tableId: urlParams.get("tableId"),
+      tableId,
       tableNumber: urlParams.get("tableNumber") || urlParams.get("tableName") || urlParams.get("name"),
       tableName: urlParams.get("tableName"),
-      sessionId: urlParams.get("sessionId"),
+      sessionId,
       capturedFrom: window.location.href,
     };
   });
@@ -56,20 +66,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (hasQrUrl) {
       const forwardedSession: DiningSession = {
         ...EMPTY_SESSION,
-        companyId: urlParams.get("companyId"),
+        companyId,
         companyName: urlParams.get("companyName"),
-        branchId: urlParams.get("branchId"),
+        branchId,
         branchName: urlParams.get("branchName"),
-        tableId: urlParams.get("tableId"),
+        tableId,
         tableNumber: urlParams.get("tableNumber") || urlParams.get("tableName") || urlParams.get("name"),
         tableName: urlParams.get("tableName"),
-        sessionId: urlParams.get("sessionId"),
+        sessionId,
         capturedFrom: window.location.href,
       };
       persist(hasForwardedContext ? forwardedSession : { ...EMPTY_SESSION, capturedFrom: window.location.href });
     }
     dispatch(fetchQrContext(location.search));
-  }, [dispatch, hasForwardedContext, hasQrUrl, location.search]);
+  }, [branchId, companyId, dispatch, hasForwardedContext, hasQrUrl, location.search, sessionId, tableId]);
 
   useEffect(() => {
     if (qrContext.status !== "succeeded" || !qrContext.data) return;

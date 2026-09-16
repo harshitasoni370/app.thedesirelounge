@@ -7,6 +7,7 @@ import { CartPage } from "@/pages/CartPage";
 import { CheckoutPage } from "@/pages/CheckoutPage";
 import { ConfirmPage } from "@/pages/ConfirmPage";
 import { ProfilePage } from "@/pages/ProfilePage";
+import { OffersPage } from "@/pages/OffersPage";
 
 /**
  * /category and /menu carry NO id in the URL — the category/subcategory
@@ -19,8 +20,14 @@ import { ProfilePage } from "@/pages/ProfilePage";
 export function AppRoutes() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const hasQrParams = params.has("type") || ["companyId", "branchId", "tableId", "sessionId"]
-    .every((key) => params.has(key));
+  const hasForwardedContext =
+    Boolean(params.get("companyId") || params.get("companyID") || params.get("uidCompanyId")) &&
+    Boolean(params.get("branchId") || params.get("branchID") || params.get("uidBranchId")) &&
+    Boolean(
+      params.get("tableId") || params.get("tableID") || params.get("uidTableId") ||
+      params.get("sessionId") || params.get("tableSessionId") || params.get("Table-Session-Id")
+    );
+  const hasQrParams = params.has("type") || hasForwardedContext;
 
   return (
     <Routes>
@@ -32,6 +39,7 @@ export function AppRoutes() {
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/confirm" element={<ConfirmPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/offers" element={<OffersPage />} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

@@ -5,8 +5,8 @@ const defaults = {
     imageBaseUrl: "https://fumesandflavoursapi.cylsysuat.com",
   },
   production: {
-    apiBaseUrl: "https://api.thedesirelounge.com/api",
-    imageBaseUrl: "https://api.thedesirelounge.com",
+    apiBaseUrl: "https://restaurents-api.cylsys.com/api",
+    imageBaseUrl: "https://restaurents-api.cylsys.com",
   },
 }[environment];
 
@@ -20,7 +20,7 @@ export const URLS = {
     imageBase: import.meta.env.VITE_IMAGE_BASE_URL || defaults.imageBaseUrl,
   },
   assets: {
-    logo: "/logo.svg",
+    logo: "https://restaurents-api.cylsys.com/Assets/theDesireLounge/Image/Logo/logo.webp",
   },
   environment,
 };

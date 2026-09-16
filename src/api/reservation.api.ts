@@ -1,21 +1,21 @@
 import { apiClient } from "./axiosClient";
-import { unwrapToArray } from "./normalize";
 import type { CreateReservationRequest, ReservationApiRecord } from "@/types/api.types";
 
 /**
  * POST /Reservation/CraeteReservation
  * (The typo "Craete" is in the live API's own path — kept exactly as-is.)
  *
- * NOT currently called from any page — there's no reservation form in
- * the UI yet. Ready to wire up once a "Reserve a table" page/form
- * exists; the request shape below is confirmed from the Postman
- * collection.
+ * Called by the Live Sports checkout form and returns the reservation id when
+ * the API includes one in its response.
  */
-export async function createReservation(payload: CreateReservationRequest): Promise<string | null> {
-  const res = await apiClient.post("/Reservation/CraeteReservation", payload);
-  const records = unwrapToArray<ReservationApiRecord>(res.data);
-  const raw = records[0];
-  if (!raw) return null;
-  const id = raw.reservationId ?? raw.uidReservationId ?? raw.id;
-  return id ? String(id) : null;
+export async function createReservation(
+  payload: CreateReservationRequest,
+  tableSessionId?: string | null,
+): Promise<ReservationApiRecord | null> {
+  const res = await apiClient.post("/Reservation/CraeteReservation", payload, {
+    headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
+  });
+  const body = res.data as { data?: ReservationApiRecord; result?: ReservationApiRecord } & ReservationApiRecord;
+  const record = body.data || body.result || body;
+  return record && typeof record === "object" ? record : null;
 }

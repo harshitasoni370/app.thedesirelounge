@@ -23,8 +23,11 @@ export const fetchQrContext = createAsyncThunk(
   async (search: string, { signal, rejectWithValue }) => {
     const searchParams = new URLSearchParams(search);
     const params = Object.fromEntries(searchParams.entries());
-    const forwardedKeys = ["companyId", "branchId", "tableId", "sessionId"];
-    const hasForwardedContext = forwardedKeys.every((key) => params[key]);
+    const readParam = (...keys: string[]) => keys.some((key) => Boolean(params[key]));
+    const hasForwardedContext =
+      readParam("companyId", "companyID", "uidCompanyId") &&
+      readParam("branchId", "branchID", "uidBranchId") &&
+      (readParam("tableId", "tableID", "uidTableId") || readParam("sessionId", "tableSessionId", "Table-Session-Id"));
     if (!QR_CONTEXT_PARAMS.some((key) => params[key]) && !hasForwardedContext) return null;
 
     const pending = { params, data: null, fetchedAt: null };
@@ -36,10 +39,13 @@ export const fetchQrContext = createAsyncThunk(
       const data = Object.fromEntries(
         [
           "companyId",
+          "companyID",
           "uidCompanyId",
           "branchId",
+          "branchID",
           "uidBranchId",
           "tableId",
+          "tableID",
           "uidTableId",
           "companyName",
           "branchName",
@@ -47,6 +53,8 @@ export const fetchQrContext = createAsyncThunk(
           "tableNumber",
           "tableNo",
           "sessionId",
+          "tableSessionId",
+          "Table-Session-Id",
         ]
           .filter((key) => params[key])
           .map((key) => [key, params[key]])

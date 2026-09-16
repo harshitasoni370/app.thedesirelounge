@@ -1,12 +1,21 @@
 import { useSession } from "@/context/SessionContext";
+import { useLocation } from "react-router-dom";
 
 export function SessionDetails() {
   const { session } = useSession();
-  const params = new URLSearchParams(session.capturedFrom?.split("?")[1] || "");
+  const location = useLocation();
+  const params = new URLSearchParams(location.search || session.capturedFrom?.split("?")[1] || "");
   const details = [
+    ["Category", params.get("categoryName") || params.get("category")],
+    ["Booking", params.get("bookingType")],
+    ["Game", params.get("gameName")],
+    ["Session", params.get("sessionType")],
+    ["Players", params.get("players")],
+    ["Duration", params.get("duration")],
+    ["Difficulty", params.get("difficulty")],
     ["Company", session.companyName],
     ["Table ID", session.tableId],
-    ["Table", session.tableName || session.tableNumber || params.get("name")],
+    ["Table", session.tableName || session.tableNumber || params.get("tableNumber") || params.get("tableNo") || params.get("tableName") || params.get("name")],
     ["Branch", session.branchName],
     ["Company ID", session.companyId],
     ["Branch ID", session.branchId],
