@@ -1,11 +1,18 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchQrContext, selectQrContext } from "@/store/slices/qrContextSlice";
+import {
+  checkDevice,
+  fetchQrContext,
+  resolveParam,
+  selectDeviceId,
+  selectQrContext,
+} from "@/store/slices/qrContextSlice";
 import { readLocal, writeLocal } from "@/utils/storage";
 import { EMPTY_SESSION, type DiningSession } from "@/types/session.types";
 import { STATIC_SESSION } from "@/config/staticSession";
 import { createTableSession } from "@/api/tableSession.api";
+import { getOrCreateDeviceId } from "@/utils/deviceId";
 
 const SESSION_KEY = "ff_session_v1";
 
@@ -18,6 +25,7 @@ interface SessionContextValue {
   captureSession: () => void;
   setTableNumber: (table: string) => void;
   clearSession: () => void;
+  deviceId: string | null;
 }
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
@@ -32,10 +40,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const dispatch = useAppDispatch();
   const qrContext = useAppSelector(selectQrContext);
+  const storeDeviceId = useAppSelector(selectDeviceId);
   const urlParams = new URLSearchParams(location.search);
   const readUrlParam = (...keys: string[]) => {
     for (const key of keys) {
-      const value = urlParams.get(key);
+      const value = resolveParam(urlParams, key);
       if (value) return value;
     }
     return null;
@@ -44,20 +53,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const branchId = readUrlParam("branchId", "branchID", "uidBranchId");
   const tableId = readUrlParam("tableId", "tableID", "uidTableId");
   const sessionId = readUrlParam("sessionId", "tableSessionId", "Table-Session-Id");
+  const deviceId = storeDeviceId || readUrlParam("deviceId");
   const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
   const hasQrUrl = Boolean(urlParams.get("type")) || hasForwardedContext;
   const [session, setSession] = useState<DiningSession>(() => {
     if (!hasForwardedContext) return readLocal(SESSION_KEY, EMPTY_SESSION);
     return {
       ...EMPTY_SESSION,
-      companyId,
-      companyName: urlParams.get("companyName"),
-      branchId,
-      branchName: urlParams.get("branchName"),
-      tableId,
-      tableNumber: urlParams.get("tableNumber") || urlParams.get("tableName") || urlParams.get("name"),
-      tableName: urlParams.get("tableName"),
-      sessionId,
+      companyId: companyId || "",
+      companyName: resolveParam(urlParams, "companyName"),
+      branchId: branchId || "",
+      branchName: resolveParam(urlParams, "branchName"),
+      tableId: tableId || "",
+      tableNumber:
+        readUrlParam("tableNumber", "tableNo", "tableName", "name") || "",
+      tableName: resolveParam(urlParams, "tableName"),
+      sessionId: sessionId || "",
       capturedFrom: window.location.href,
     };
   });
@@ -66,20 +77,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (hasQrUrl) {
       const forwardedSession: DiningSession = {
         ...EMPTY_SESSION,
-        companyId,
-        companyName: urlParams.get("companyName"),
-        branchId,
-        branchName: urlParams.get("branchName"),
-        tableId,
-        tableNumber: urlParams.get("tableNumber") || urlParams.get("tableName") || urlParams.get("name"),
-        tableName: urlParams.get("tableName"),
-        sessionId,
+        companyId: companyId || "",
+        companyName: resolveParam(urlParams, "companyName"),
+        branchId: branchId || "",
+        branchName: resolveParam(urlParams, "branchName"),
+        tableId: tableId || "",
+        tableNumber:
+          readUrlParam("tableNumber", "tableNo", "tableName", "name") || "",
+        tableName: resolveParam(urlParams, "tableName"),
+        sessionId: sessionId || "",
         capturedFrom: window.location.href,
       };
       persist(hasForwardedContext ? forwardedSession : { ...EMPTY_SESSION, capturedFrom: window.location.href });
     }
     dispatch(fetchQrContext(location.search));
   }, [branchId, companyId, dispatch, hasForwardedContext, hasQrUrl, location.search, sessionId, tableId]);
+
+  useEffect(() => {
+    if (!deviceId || !companyId) return;
+    if (qrContext.device.status === "idle") {
+      dispatch(checkDevice({ deviceId, companyId }));
+    }
+  }, [companyId, deviceId, dispatch, qrContext.device.status]);
 
   useEffect(() => {
     if (qrContext.status !== "succeeded" || !qrContext.data) return;
@@ -102,6 +121,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const readParam = (...keys: string[]) => {
       for (const key of keys) {
         if (qrContext.params[key]) return qrContext.params[key];
+        const aliased = resolveParam(qrContext.params, key);
+        if (aliased) return aliased;
       }
       return null;
     };
@@ -113,7 +134,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       branchId: readValue(["branchId", "uidBranchId"]) || readParam("branchId", "uidBranchId") || session.branchId,
       branchName: readValue(["branchName"]) || session.branchName,
       tableId: readValue(["tableId", "uidTableId"]) || readParam("tableId", "uidTableId") || session.tableId,
-      tableNumber: readValue(["tableNumber", "tableNo"]) || readParam("tableNumber", "tableNo", "name") || session.tableNumber,
+      tableNumber:
+        readValue(["tableNumber", "tableNo"]) ||
+        readParam("tableNumber", "tableNo", "name", "tableName") ||
+        session.tableNumber,
       tableName: readValue(["tableName"]) || readParam("tableName") || session.tableName,
       sessionId: readValue(["sessionId"]) || readParam("sessionId") || session.sessionId,
       capturedFrom: window.location.href,
@@ -131,9 +155,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       branchId: session.branchId,
       tableId: session.tableId,
     })
-      .then((sessionId) => {
-        if (cancelled || !sessionId) return;
-        persist({ ...session, sessionId, updatedAt: new Date().toISOString() });
+      .then((newSessionId) => {
+        if (cancelled || !newSessionId) return;
+        persist({ ...session, sessionId: newSessionId, updatedAt: new Date().toISOString() });
       })
       .catch((error) => console.error("Could not create table session", error));
 
@@ -169,8 +193,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const isReady = !hasQrUrl || qrContext.status === "succeeded" || qrContext.status === "failed";
 
   const value = useMemo<SessionContextValue>(
-    () => ({ session, isReady, hasSession, captureSession, setTableNumber, clearSession }),
-    [session, isReady, hasSession]
+    () => ({
+      session,
+      isReady,
+      hasSession,
+      captureSession,
+      setTableNumber,
+      clearSession,
+      deviceId,
+    }),
+    [session, isReady, hasSession, deviceId]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

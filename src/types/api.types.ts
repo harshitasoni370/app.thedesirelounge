@@ -226,6 +226,7 @@ export interface PlaceOrderRequest {
   guestCount: number;
   companyId: string | null;
   branchId: string | null;
+  deviceId?: string;
 }
 
 export interface OrderApiRecord {
@@ -299,19 +300,21 @@ export interface CustomerRecord {
 export interface CreateReservationRequest {
   companyId: string;
   branchId: string;
-  reservationCategory: string;
+  moduleId: string;
+  reservationCategory?: string;
   guestName: string;
+  countryCode: string;
   mobile: string;
-  dateOfBirth?: string;
+  email?: string;
+  dateOfBirth?: string | null;
   guestCount: number;
   /** ISO 8601 datetime, e.g. "2026-08-20T08:30:00Z". */
   reservationDateTime: string;
-  specialRequest?: string;
-  email?: string;
   reservationTitle?: string | null;
   tableId?: string;
-  moduleId?: string;
+  specialRequest?: string;
   extraDetails?: Record<string, unknown> | null;
+  deviceId: string;
 }
 
 export interface CreateTableSessionRequest {

@@ -30,6 +30,7 @@ export interface CheckoutInfo {
   orderType: "dine-in";
   payment: "cod";
   dob?: string;
+  deviceId?: string;
 }
 
 export interface PlacedOrder {

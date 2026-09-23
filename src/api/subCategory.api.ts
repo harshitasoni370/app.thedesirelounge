@@ -15,8 +15,9 @@ import type { SubCategory } from "@/types/menu.types";
  */
 export async function fetchSubCategoriesByCategory(branchId: string, categoryId: string): Promise<SubCategory[]> {
   const payload: GetSubCategoryRequest = {
-    categoryId: categoryId,
-    subcategoryId: null,
+    // categoryId: categoryId,
+    // subcategoryId: null,
+    categoryId,
     branchId,
     dayOfWeek: null,
     time: null,
