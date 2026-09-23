@@ -20,7 +20,7 @@ export function HomePage() {
           <p className="hero__subtitle hero-anim">Sheesha Lounge</p>
           <span className="hero__divider hero-anim" aria-hidden="true" />
           <p className="hero__lead hero-anim">
-            Where premium food <br /> meets premium shisha.
+            Where premium food <br /> meets premium sheesha.
           </p>
           <Link to="/categories" className="btn btn-primary hero-anim" onClick={captureSession}>
             Explore Menu
