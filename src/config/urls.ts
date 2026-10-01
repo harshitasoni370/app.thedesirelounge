@@ -14,6 +14,9 @@ const defaults = {
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : defaults.apiBaseUrl);
 
 export const URLS = {
+  website: {
+    home: import.meta.env.VITE_HOME_SITE_URL || "https://dl.thedesirelounge.com",
+  },
   api: {
     base: apiBaseUrl,
     qrContext: import.meta.env.VITE_QR_CONTEXT_API_URL || `${apiBaseUrl}/QR/qrcontext`,
@@ -34,7 +37,7 @@ export const URLS = {
 export const QR_CONTEXT_STORAGE_KEY = "desire_qr_context";
 export const QR_CONTEXT_PARAMS = ["type", "location", "name", "resturant"] as const;
 
-export const DEFAULT_COUNTRY_CODE = "+91";
+export const DEFAULT_COUNTRY_CODE = "+971";
 
 export const SHORT_PARAM_ALIASES: Record<string, string> = {
   cid: "companyId",

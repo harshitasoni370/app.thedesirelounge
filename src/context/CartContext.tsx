@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { readLocal, writeLocal } from "@/utils/storage";
 import { addCartItem, getCartItems, removeCartItem, updateCartQuantity } from "@/api/cart.api";
@@ -15,6 +15,7 @@ interface CartContextValue {
   total: number;
   cartId: string | null;
   addToCart: (product: MenuItem, qty?: number) => void;
+  rebuildServerCart: () => Promise<string | null>;
   setQty: (productId: string, qty: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
@@ -40,6 +41,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [items, setItems] = useState<CartItem[]>(() => readLocal(CART_KEY, [] as CartItem[]));
   const [cartId, setCartId] = useState<string | null>(() => readLocal(CART_ID_KEY, null as string | null));
+  const cartIdRef = useRef(cartId);
+  const addQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     const urlCartId = new URLSearchParams(location.search).get("cartId");
@@ -55,6 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const persistCartId = (next: string | null) => {
+    cartIdRef.current = next;
     setCartId(next);
     writeLocal(CART_ID_KEY, next);
   };
@@ -98,24 +102,63 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    addCartItem({
-      companyId: session.companyId,
-      branchId: session.branchId,
-      menuItemId: product.id,
-      quantity: existing ? existing.qty + qty : qty,
-      tableSessionId: session.sessionId,
-    })
-      .then(({ cartId: newCartId, cartItemId }) => {
-        if (newCartId && newCartId !== cartId) persistCartId(newCartId);
-        if (cartItemId) {
-          setItems((prev) => {
-            const updated = prev.map((i) => (i.id === product.id ? { ...i, cartItemId } : i));
-            writeLocal(CART_KEY, updated);
-            return updated;
-          });
-        }
-      })
-      .catch((err) => console.error("Could not sync cart item", err));
+    const syncCartItem = async () => {
+      const { cartId: newCartId, cartItemId } = await addCartItem({
+        companyId: session.companyId!,
+        branchId: session.branchId!,
+        cartId: cartIdRef.current,
+        menuItemId: product.id,
+        quantity: existing ? existing.qty + qty : qty,
+      });
+      if (newCartId && newCartId !== cartIdRef.current) persistCartId(newCartId);
+      if (cartItemId) {
+        setItems((prev) => {
+          const updated = prev.map((i) => (i.id === product.id ? { ...i, cartItemId } : i));
+          writeLocal(CART_KEY, updated);
+          return updated;
+        });
+      }
+    };
+
+    addQueueRef.current = addQueueRef.current.then(syncCartItem).catch((err) => {
+      console.error("Could not sync cart item", err);
+    });
+  };
+
+  const rebuildServerCart = async (): Promise<string | null> => {
+    let rebuiltCartId: string | null = null;
+    const rebuildTask = addQueueRef.current.then(async () => {
+      if (!session.companyId || !session.branchId || items.length === 0) return;
+
+      persistCartId(null);
+      let rebuiltItems: CartItem[] = items.map((item) => ({ ...item, cartItemId: undefined }));
+      persistItems(rebuiltItems);
+
+      for (let index = 0; index < rebuiltItems.length; index += 1) {
+        const item = rebuiltItems[index];
+        const result = await addCartItem({
+          companyId: session.companyId!,
+          branchId: session.branchId!,
+          cartId: cartIdRef.current,
+          menuItemId: item.id,
+          quantity: item.qty,
+        });
+        if (!result.cartId) throw new Error("Cart API did not return a cart ID");
+
+        rebuiltCartId = result.cartId;
+        persistCartId(result.cartId);
+        rebuiltItems = rebuiltItems.map((current, itemIndex) =>
+          itemIndex === index ? { ...current, cartItemId: result.cartItemId || undefined } : current
+        );
+        persistItems(rebuiltItems);
+      }
+    });
+
+    addQueueRef.current = rebuildTask.then(() => undefined).catch((error) => {
+      console.error("Could not rebuild server cart", error);
+    });
+    await rebuildTask;
+    return rebuiltCartId;
   };
 
   const setQty = (productId: string, qty: number) => {
@@ -145,7 +188,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const count = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);
   const total = useMemo(() => items.reduce((sum, i) => sum + i.price * i.qty, 0), [items]);
 
-  const value: CartContextValue = { items, count, total, cartId, addToCart, setQty, removeFromCart, clearCart };
+  const value: CartContextValue = {
+    items,
+    count,
+    total,
+    cartId,
+    addToCart,
+    rebuildServerCart,
+    setQty,
+    removeFromCart,
+    clearCart,
+  };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

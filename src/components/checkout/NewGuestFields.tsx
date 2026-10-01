@@ -1,10 +1,13 @@
 import { NavIcon } from "@/components/ui/Icon";
+import type { TableOption } from "@/api/table.api";
+import type { CountryCode } from "libphonenumber-js/max";
+import { CountryCodeSelect } from "@/components/checkout/CountryCodeSelect";
 
 interface Props {
   name: string;
   onNameChange: (v: string) => void;
-  countryCode: string;
-  onCountryCodeChange: (v: string) => void;
+  country: CountryCode;
+  onCountryChange: (country: CountryCode) => void;
   phone: string;
   onPhoneChange: (v: string) => void;
   dob: string;
@@ -14,7 +17,10 @@ interface Props {
   people: string;
   onPeopleChange: (v: string) => void;
   table: string;
-  onTableChange: (v: string) => void;
+  tableId: string;
+  tables: TableOption[];
+  tablesLoading: boolean;
+  onTableChange: (id: string) => void;
   reservationDate: string;
   onReservationDateChange: (v: string) => void;
   reservationTime: string;
@@ -29,8 +35,8 @@ interface Props {
 export function NewGuestFields({
   name,
   onNameChange,
-  countryCode,
-  onCountryCodeChange,
+  country,
+  onCountryChange,
   phone,
   onPhoneChange,
   dob,
@@ -40,6 +46,9 @@ export function NewGuestFields({
   people,
   onPeopleChange,
   table,
+  tableId,
+  tables,
+  tablesLoading,
   onTableChange,
   reservationDate,
   onReservationDateChange,
@@ -84,17 +93,7 @@ export function NewGuestFields({
           <span className="field-input__icon" aria-hidden="true">
             <NavIcon name="phone" />
           </span>
-          <select
-            className="form-select form-select--code"
-            aria-label="Country code"
-            value={countryCode}
-            onChange={(e) => onCountryCodeChange(e.target.value)}
-          >
-            <option value="+971">🇦🇪 +971</option>
-            <option value="+91">🇮🇳 +91</option>
-            <option value="+1">🇺🇸 +1</option>
-            <option value="+44">🇬🇧 +44</option>
-          </select>
+          <CountryCodeSelect country={country} onChange={onCountryChange} />
           <input
             id="input-phone"
             className="form-input"
@@ -102,7 +101,7 @@ export function NewGuestFields({
             inputMode="numeric"
             autoComplete="tel"
             placeholder="Enter your mobile number"
-            maxLength={10}
+            maxLength={15}
             value={phone}
             onChange={(e) => onPhoneChange(e.target.value)}
             required
@@ -178,55 +177,72 @@ export function NewGuestFields({
       </div>
 
       {isReservationCheckout && (
-        <>
-          <div className="form-group">
-            <label className="form-label" htmlFor="input-reservation-date">
-              Reservation Date
-            </label>
-            <div className="field-input">
-              <input
-                id="input-reservation-date"
-                className="form-input"
-                type="date"
-                min={today}
-                value={reservationDate}
-                onChange={(e) => onReservationDateChange(e.target.value)}
-                required
-              />
-            </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="input-email">
+            Email
+          </label>
+          <div className="field-input">
+            <input
+              id="input-email"
+              className="form-input"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => onEmailChange(e.target.value)}
+              required
+            />
           </div>
+        </div>
+      )}
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="input-reservation-time">
-              Reservation Time
-            </label>
-            <div className="field-input">
-              <input
-                id="input-reservation-time"
-                className="form-input"
-                type="time"
-                value={reservationTime}
-                onChange={(e) => onReservationTimeChange(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="input-order-date">
+          {isReservationCheckout ? "Reservation Date" : "Order Date"}
+        </label>
+        <div className="field-input">
+          <input
+            id="input-order-date"
+            className="form-input"
+            type="date"
+            min={today}
+            value={reservationDate}
+            onChange={(e) => onReservationDateChange(e.target.value)}
+            required
+          />
+        </div>
+      </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="input-special-request">
-              Special Request
-            </label>
-            <div className="field-input">
-              <textarea
-                id="input-special-request"
-                className="form-input"
-                placeholder="Any special request"
-                value={specialRequest}
-                onChange={(e) => onSpecialRequestChange(e.target.value)}
-              />
-            </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="input-order-time">
+          {isReservationCheckout ? "Reservation Time" : "Order Time"}
+        </label>
+        <div className="field-input">
+          <input
+            id="input-order-time"
+            className="form-input"
+            type="time"
+            value={reservationTime}
+            onChange={(e) => onReservationTimeChange(e.target.value)}
+            required
+          />
+        </div>
+      </div>
+
+      {isReservationCheckout && (
+        <div className="form-group">
+          <label className="form-label" htmlFor="input-special-request">
+            Special Request
+          </label>
+          <div className="field-input">
+            <textarea
+              id="input-special-request"
+              className="form-input"
+              placeholder="Any special request"
+              value={specialRequest}
+              onChange={(e) => onSpecialRequestChange(e.target.value)}
+            />
           </div>
-        </>
+        </div>
       )}
 
       {!isLiveSportsReservation && (
@@ -238,18 +254,26 @@ export function NewGuestFields({
             <span className="field-input__icon" aria-hidden="true">
               <NavIcon name="table" />
             </span>
-            <input
+            <select
               id="input-table"
               className="form-input"
-              type="text"
-              inputMode="numeric"
-              placeholder="Enter your table number"
-              value={table}
+              value={tableId}
               onChange={(e) => onTableChange(e.target.value)}
               required={tableRequired}
-            />
+              disabled={tablesLoading}
+            >
+              <option value="">{tablesLoading ? "Loading tables…" : "Select a table"}</option>
+              {tableId && !tables.some((option) => option.id === tableId) && (
+                <option value={tableId}>{table || "Current table"}</option>
+              )}
+              {tables.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}{option.code ? ` (${option.code})` : ""}
+                </option>
+              ))}
+            </select>
           </div>
-          <p className="form-help">You can find your table number on your table.</p>
+          <p className="form-help">{table || "Choose your table number to continue."}</p>
         </div>
       )}
     </div>

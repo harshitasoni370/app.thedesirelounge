@@ -17,6 +17,12 @@ export interface DiningSession {
   tableNumber: string | null;
   tableName: string | null;
   sessionId: string | null;
+  /**
+   * "qr"     -> guest ne QR scan kiya, table session id valid hai (header me jayegi).
+   * "direct" -> guest website/direct link se aaya, session nahi banegi aur
+   *             Table-Session-Id header kisi API me nahi jayega.
+   */
+  source?: "qr" | "direct";
   /** Raw querystring the session was captured from, kept for debugging. */
   capturedFrom?: string;
   /** ISO timestamp of when this session was captured/updated. */

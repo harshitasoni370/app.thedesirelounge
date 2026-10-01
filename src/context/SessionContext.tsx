@@ -56,10 +56,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const deviceId = storeDeviceId || readUrlParam("deviceId");
   const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
   const hasQrUrl = Boolean(urlParams.get("type")) || hasForwardedContext;
+  // Website se seedha aaya (company+branch hai, par na QR type, na tableId/sessionId)
+  // => direct flow: koi table session nahi, header me Table-Session-Id nahi.
+  const isDirectEntry = Boolean(companyId && branchId) && !hasQrUrl;
+  const buildDirectSession = (): DiningSession => ({
+    ...EMPTY_SESSION,
+    companyId: companyId || "",
+    companyName: resolveParam(urlParams, "companyName"),
+    branchId: branchId || "",
+    branchName: resolveParam(urlParams, "branchName"),
+    source: "direct",
+    capturedFrom: window.location.href,
+  });
   const [session, setSession] = useState<DiningSession>(() => {
+    if (isDirectEntry) return buildDirectSession();
     if (!hasForwardedContext) return readLocal(SESSION_KEY, EMPTY_SESSION);
     return {
       ...EMPTY_SESSION,
+      source: "qr",
       companyId: companyId || "",
       companyName: resolveParam(urlParams, "companyName"),
       branchId: branchId || "",
@@ -74,9 +88,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (hasQrUrl) {
+    if (isDirectEntry) {
+      persist(buildDirectSession());
+    } else if (hasQrUrl) {
       const forwardedSession: DiningSession = {
         ...EMPTY_SESSION,
+        source: "qr",
         companyId: companyId || "",
         companyName: resolveParam(urlParams, "companyName"),
         branchId: branchId || "",
@@ -88,10 +105,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         sessionId: sessionId || "",
         capturedFrom: window.location.href,
       };
-      persist(hasForwardedContext ? forwardedSession : { ...EMPTY_SESSION, capturedFrom: window.location.href });
+      persist(
+        hasForwardedContext
+          ? forwardedSession
+          : { ...EMPTY_SESSION, source: "qr", capturedFrom: window.location.href }
+      );
     }
     dispatch(fetchQrContext(location.search));
-  }, [branchId, companyId, dispatch, hasForwardedContext, hasQrUrl, location.search, sessionId, tableId]);
+  }, [branchId, companyId, dispatch, hasForwardedContext, hasQrUrl, isDirectEntry, location.search, sessionId, tableId]);
 
   useEffect(() => {
     if (!deviceId || !companyId) return;
@@ -102,6 +123,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (qrContext.status !== "succeeded" || !qrContext.data) return;
+    // Direct flow me purane QR context se sessionId/tableId wapas nahi lena.
+    if (!hasQrUrl && (isDirectEntry || session.source === "direct")) return;
 
     const readValue = (keys: string[]) => {
       const wanted = new Set(keys.map((key) => key.toLowerCase()));
@@ -140,6 +163,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         session.tableNumber,
       tableName: readValue(["tableName"]) || readParam("tableName") || session.tableName,
       sessionId: readValue(["sessionId"]) || readParam("sessionId") || session.sessionId,
+      source: hasQrUrl ? "qr" : session.source,
       capturedFrom: window.location.href,
       updatedAt: new Date().toISOString(),
     };
@@ -147,6 +171,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [qrContext.data, qrContext.params, qrContext.status]);
 
   useEffect(() => {
+    // Direct flow me table session create nahi karni.
+    if (session.source === "direct") return;
     if (session.sessionId || !session.companyId || !session.branchId || !session.tableId) return;
     let cancelled = false;
 
@@ -176,6 +202,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const next: DiningSession = {
       ...session,
       ...STATIC_SESSION,
+      source: session.source === "qr" ? "qr" : "direct",
       updatedAt: new Date().toISOString(),
     };
     persist(next);

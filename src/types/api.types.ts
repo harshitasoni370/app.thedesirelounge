@@ -147,6 +147,7 @@ export interface ApiEnvelope<T> {
 export interface AddCartRequest {
   companyId: string;
   branchId: string;
+  cartId?: string;
   menuItemId: string;
   quantity: number;
 }
@@ -210,20 +211,22 @@ export interface CartApiRecord {
 /**
  * POST /Order/order — matches the Postman collection's payload shape.
  * cartId identifies the cart being converted into an order.
- * NOTE: the API's field is capitalized "CountryCode" (not
- * "countryCode") — matched exactly here since it's a literal wire
- * field name, not a JS naming choice.
+ * The order request uses the API's `countryCode` field as shown in the
+ * checkout payload contract.
  *
  */
 export interface PlaceOrderRequest {
   sessionId: string | null;
   cartId: string;
+  tableId: string | null;
   firstName: string;
   lastName: string;
-  CountryCode: string;
+  countryCode: string;
   mobile: string;
   dob?: string;
+  email?: string;
   guestCount: number;
+  reservationDateTime?: string;
   companyId: string | null;
   branchId: string | null;
   deviceId?: string;

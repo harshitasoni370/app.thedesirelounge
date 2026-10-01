@@ -26,20 +26,17 @@ function normalizeDob(value?: string): string | undefined {
  * POST /Order/order
  *
  * Converts the guest's cart into a placed order. Note the request's
- * `CountryCode` field is capitalized exactly like this on the wire —
- * see PlaceOrderRequest in api.types.ts. Payload matches the Postman
- * collection exactly — does NOT include companyId/branchId or session data.
+ * Payload matches the checkout request contract — does NOT include
+ * companyId/branchId or session data.
  * Confirmed response: { data: { orderId, orderNo } }.
  */
 export async function placeOrder(payload: PlaceOrderRequest): Promise<PlaceOrderResult> {
-  const { sessionId, dob, companyId: _companyId, branchId: _branchId, ...orderFields } = payload;
+  const { sessionId: _sessionId, dob, companyId: _companyId, branchId: _branchId, ...orderFields } = payload;
   const normalizedDob = normalizeDob(dob);
   const orderPayload: Omit<PlaceOrderRequest, "sessionId" | "companyId" | "branchId"> = normalizedDob
     ? { ...orderFields, dob: normalizedDob }
     : orderFields;
-  const res = await apiClient.post("/Order/order", orderPayload, {
-    headers: sessionId ? { "Table-Session-Id": sessionId } : undefined,
-  });
+  const res = await apiClient.post("/Order/order", orderPayload);
   assertApiSuccess(res.data);
   const data = (res.data as { data?: { orderId?: string; orderNo?: string } } | null)?.data;
   return {

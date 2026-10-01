@@ -14,6 +14,7 @@ import { generateOrderId } from "@/utils/format";
 import { writeLocal } from "@/utils/storage";
 import { placeOrder as placeOrderApi } from "@/api/order.api";
 import { createReservation } from "@/api/reservation.api";
+import { fetchTables, type TableOption } from "@/api/table.api";
 import { getCustomerByMobile } from "@/api/customer.api";
 import {
   getReservationDetails,
@@ -25,6 +26,8 @@ import {
 } from "@/utils/checkoutReservation";
 import { useCheckoutParams } from "@/hooks/useCheckoutParams";
 import { useReturningGuestSync } from "@/hooks/useReturningGuestSync";
+import { getCountryCallingCode, type CountryCode } from "libphonenumber-js/max";
+import { getCountryForCallingCode } from "@/utils/countryCallingCodes";
 import type { CheckoutInfo, GuestType, PlacedOrder } from "@/types/cart.types";
 import type { ReservationApiRecord } from "@/types/api.types";
 import {
@@ -42,7 +45,7 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
-  const { items, count, total, cartId, clearCart } = useCart();
+  const { items, count, total, cartId, clearCart, rebuildServerCart } = useCart();
   const { session, setTableNumber, deviceId: ctxDeviceId } = useSession();
   const { showToast } = useToast();
 
@@ -88,13 +91,22 @@ export function CheckoutPage() {
 
   const [name, setName] = useState(p.urlName || (returningFromDevice?.guestName ?? ""));
   const [countryCode, setCountryCode] = useState(p.urlCountryCode);
+  const [country, setCountry] = useState<CountryCode>(() => getCountryForCallingCode(p.urlCountryCode));
   const [phone, setPhone] = useState(p.urlPhone || (returningFromDevice?.mobile ?? ""));
   const [people, setPeople] = useState(p.urlPeople);
   const [table, setTable] = useState(p.urlTable || session.tableNumber || "");
+  const [selectedTableId, setSelectedTableId] = useState(session.tableId || p.readParam("tableId") || "");
+  const [tables, setTables] = useState<TableOption[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(false);
   const [dob, setDob] = useState(p.urlDob || normalizeDob(returningFromDevice?.dateOfBirth ?? null));
   const [email, setEmail] = useState(p.urlEmail);
-  const [reservationDate, setReservationDate] = useState(p.urlReservationDate);
-  const [reservationTime, setReservationTime] = useState("");
+  const initialDateTime = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString();
+  const [reservationDate, setReservationDate] = useState(
+    p.urlReservationDate || (p.isReservationCheckout ? "" : initialDateTime.slice(0, 10))
+  );
+  const [reservationTime, setReservationTime] = useState(
+    p.isReservationCheckout ? "" : initialDateTime.slice(11, 16)
+  );
   const [specialRequest, setSpecialRequest] = useState("");
   const [momentName, setMomentName] = useState(p.urlMomentName);
 
@@ -102,11 +114,58 @@ export function CheckoutPage() {
   const [phoneReturn, setPhoneReturn] = useState(p.urlPhone || (returningFromDevice?.mobile ?? ""));
   const [tableReturn, setTableReturn] = useState(p.urlTable || session.tableNumber || "");
 
+  useEffect(() => {
+    if (!session.branchId) {
+      setTables([]);
+      return;
+    }
+
+    let cancelled = false;
+    setTablesLoading(true);
+    fetchTables(session.branchId)
+      .then((result) => {
+        if (!cancelled) setTables(result);
+      })
+      .catch((error) => {
+        console.error("Could not load tables", error);
+        if (!cancelled) setTables([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTablesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.branchId]);
+
+  useEffect(() => {
+    if (tables.length === 0) return;
+    const normalizeTableLabel = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^table/, "");
+    const selected =
+      tables.find((option) => option.id === selectedTableId) ||
+      tables.find((option) =>
+        [option.name, option.code].some((value) => value && normalizeTableLabel(value) === normalizeTableLabel(table))
+      );
+    if (!selected) return;
+    if (selectedTableId !== selected.id) setSelectedTableId(selected.id);
+    if (table !== selected.name) setTable(selected.name);
+    if (tableReturn !== selected.name) setTableReturn(selected.name);
+  }, [selectedTableId, table, tableReturn, tables]);
+
+  const handleTableChange = (tableId: string) => {
+    const selected = tables.find((option) => option.id === tableId);
+    setSelectedTableId(tableId);
+    setTable(selected?.name || "");
+    setTableReturn(selected?.name || "");
+  };
+
   const { isLookingUpGuest, setIsLookingUpGuest, returningCustomer, lookedUpMobile } = useReturningGuestSync(
     returningFromDevice,
     session,
     guestType,
     countryCode,
+    country,
     phoneReturn,
     deviceStatus,
     {
@@ -121,6 +180,16 @@ export function CheckoutPage() {
       setGuestType,
     }
   );
+  useEffect(() => {
+    if (`+${getCountryCallingCode(country)}` !== countryCode) {
+      setCountry(getCountryForCallingCode(countryCode, country));
+    }
+  }, [country, countryCode]);
+
+  const handleCountryChange = (nextCountry: CountryCode) => {
+    setCountry(nextCountry);
+    setCountryCode(`+${getCountryCallingCode(nextCountry)}`);
+  };
   useEffect(() => {
     if (returningFromDevice) {
       setGuestType("returning");
@@ -176,7 +245,7 @@ export function CheckoutPage() {
         return;
       }
 
-      const tableId = isGuid(session.tableId) ? session.tableId : p.readParam("tableId");
+      const tableId = isGuid(selectedTableId) ? selectedTableId : p.readParam("tableId");
       const { category, title, extraDetails } = getReservationDetails({ ...p, momentName });
 
       try {
@@ -259,6 +328,7 @@ export function CheckoutPage() {
     }
 
     const now = new Date();
+    const orderReservationDateTime = `${defaultedDate}T${defaultedTime}:00.000`;
 
     // Standalone order flow clears any stale reservation confirmation.
     // A combined submit must NOT do this — it would wipe out the
@@ -273,19 +343,31 @@ export function CheckoutPage() {
     let orderNo: string | null = null;
 
     try {
-      const result = await placeOrderApi({
+      const orderPayload = {
         sessionId: p.reservationSessionId || session.sessionId,
         cartId,
+        tableId: selectedTableId || p.readParam("tableId") || null,
         firstName: firstName || "Guest",
         lastName: rest.join(" ") || "",
-        CountryCode: checkout.countryCode,
+        countryCode: checkout.countryCode,
         mobile: checkout.phone,
+        email,
         dob: checkout.dob,
         guestCount: Number(checkout.people) || 1,
+        reservationDateTime: orderReservationDateTime,
         companyId: session.companyId,
         branchId: session.branchId,
         deviceId,
-      });
+      };
+      let result;
+      try {
+        result = await placeOrderApi(orderPayload);
+      } catch (error) {
+        if (!(error instanceof Error) || !/cart may be empty or invalid/i.test(error.message)) throw error;
+        const rebuiltCartId = await rebuildServerCart();
+        if (!rebuiltCartId) throw error;
+        result = await placeOrderApi({ ...orderPayload, cartId: rebuiltCartId });
+      }
 
       orderId = result.orderId;
       orderNo = result.orderNo;
@@ -355,7 +437,7 @@ export function CheckoutPage() {
         showToast("Please enter your full name");
         return;
       }
-      if (!isValidPhone(phone, countryCode)) {
+      if (!isValidPhone(phone, countryCode, country)) {
         showToast("Enter a valid mobile number");
         return;
       }
@@ -363,11 +445,11 @@ export function CheckoutPage() {
         showToast("Select number of guests");
         return;
       }
-      if (p.isReservationCheckout && (!reservationDate || !reservationTime)) {
-        showToast("Select the reservation date and time");
+      if (!reservationDate || !reservationTime) {
+        showToast(p.isReservationCheckout ? "Select the reservation date and time" : "Select the order date and time");
         return;
       }
-      if (!p.isLiveSportsReservation && !table.trim() && !p.readParam("tableId") && !session.tableId) {
+      if (!p.isLiveSportsReservation && !selectedTableId && !p.readParam("tableId")) {
         showToast("Enter your table number");
         return;
       }
@@ -388,19 +470,23 @@ export function CheckoutPage() {
       return;
     }
 
-    // Returning guest — no editable inputs, so fill any missing
-    // reservation fields from current state before submit.
-    const resolvedPhone = (returningCustomer?.mobile || phoneReturn).replace(/\D/g, "");
-    const resolvedCountryCode = returningCustomer?.countryCode || countryCode;
+    // Use the current form value even when a returning-customer record was preloaded.
+    const resolvedPhone = (phoneReturn || returningCustomer?.mobile || "").replace(/\D/g, "");
+    const resolvedCountryCode = countryCode;
 
-    if (!isValidPhone(resolvedPhone, resolvedCountryCode)) {
+    if (!isValidPhone(resolvedPhone, resolvedCountryCode, country)) {
       showToast("Enter a valid mobile number");
+      return;
+    }
+
+    if (!reservationDate || !reservationTime) {
+      showToast(p.isReservationCheckout ? "Select the reservation date and time" : "Select the order date and time");
       return;
     }
 
     if (
       !p.isLiveSportsReservation &&
-      !(tableReturn || session.tableNumber) &&
+      !selectedTableId &&
       !p.readParam("tableId") &&
       !session.tableId
     ) {
@@ -508,8 +594,8 @@ export function CheckoutPage() {
             <NewGuestFields
               name={name}
               onNameChange={setName}
-              countryCode={countryCode}
-              onCountryCodeChange={setCountryCode}
+              country={country}
+              onCountryChange={handleCountryChange}
               phone={phone}
               onPhoneChange={setPhone}
               dob={dob}
@@ -519,7 +605,10 @@ export function CheckoutPage() {
               people={people}
               onPeopleChange={setPeople}
               table={table}
-              onTableChange={setTable}
+              tableId={selectedTableId}
+              tables={tables}
+              tablesLoading={tablesLoading}
+              onTableChange={handleTableChange}
               reservationDate={reservationDate}
               onReservationDateChange={setReservationDate}
               reservationTime={reservationTime}
@@ -532,13 +621,21 @@ export function CheckoutPage() {
             />
           ) : (
             <ReturningGuestSummary
-              countryCode={countryCode}
-              mobile={returningCustomer?.mobile || phoneReturn}
+              country={country}
+              onCountryChange={handleCountryChange}
+              mobile={phoneReturn}
+              onMobileChange={setPhoneReturn}
               table={tableReturn || session.tableNumber || ""}
+              tableId={selectedTableId}
+              tables={tables}
+              tablesLoading={tablesLoading}
+              onTableChange={handleTableChange}
               isLiveSportsReservation={p.isLiveSportsReservation}
               isReservationCheckout={p.isReservationCheckout}
               reservationDate={reservationDate}
               reservationTime={reservationTime}
+              onReservationDateChange={setReservationDate}
+              onReservationTimeChange={setReservationTime}
             />
           )}
 

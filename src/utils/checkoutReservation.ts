@@ -1,3 +1,6 @@
+import { isValidPhoneNumber, type CountryCode } from "libphonenumber-js/max";
+import { getCountryForCallingCode } from "@/utils/countryCallingCodes";
+
 /**
  * Everything here is pure/derived — no state, no side effects.
  * Extracted out of CheckoutPage so the four near-identical reservation
@@ -174,9 +177,8 @@ export function isGuid(value: string | null | undefined): value is string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
 }
 
-export function isValidPhone(phone: string, countryCode: string): boolean {
-  const digits = phone.replace(/\D/g, "");
-  if (countryCode === "+971") return /^5\d{8}$/.test(digits);
-  if (countryCode === "+91") return /^[6-9]\d{9}$/.test(digits);
-  return digits.length >= 7 && digits.length <= 10;
+export function isValidPhone(phone: string, countryCode: string, country?: CountryCode): boolean {
+  const normalizedPhone = phone.trim();
+  if (!normalizedPhone) return false;
+  return isValidPhoneNumber(normalizedPhone, country || getCountryForCallingCode(countryCode));
 }

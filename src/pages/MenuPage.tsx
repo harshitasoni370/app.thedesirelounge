@@ -37,7 +37,12 @@ function MenuContent({ subcategoryId, categoryId }: { subcategoryId: string; cat
 
   // Flat list of every subcategory across every category, in category
   // display order (Food's subs, then Shisha's subs, etc.).
-  const allSubCategories = useMemo(() => categories.flatMap((c) => c.subCategories), [categories]);
+  const allSubCategories = useMemo(() => {
+    const subCategories = categories.flatMap((category) => category.subCategories);
+    const selectedIndex = subCategories.findIndex((subcategory) => subcategory.id === subcategoryId);
+    if (selectedIndex <= 0) return subCategories;
+    return [subCategories[selectedIndex], ...subCategories.slice(0, selectedIndex), ...subCategories.slice(selectedIndex + 1)];
+  }, [categories, subcategoryId]);
 
   // Items are the only thing that can block this page — category/subcategory
   // details are "nice to have" for the header and bottom bar, and are

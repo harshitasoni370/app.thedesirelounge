@@ -374,6 +374,23 @@ a.chip {
   white-space: nowrap;
 }
 
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.header__home {
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.header__home:hover,
+.header__home:focus-visible {
+  color: var(--accent);
+}
+
 .header__cart {
   flex-shrink: 0;
   color: var(--accent);

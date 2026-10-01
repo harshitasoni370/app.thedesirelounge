@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getCustomerByMobile } from "@/api/customer.api";
 import { isValidPhone, normalizeDob } from "@/utils/checkoutReservation";
 import type { GuestType } from "@/types/cart.types";
+import type { CountryCode } from "libphonenumber-js/max";
 
 interface ReturningFromDeviceLike {
   customerId?: string | null;
@@ -48,6 +49,7 @@ export function useReturningGuestSync(
   session: SessionLike,
   guestType: GuestType,
   countryCode: string,
+  country: CountryCode,
   phoneReturn: string,
   deviceStatus: string,
   fields: FieldSetters
@@ -123,7 +125,7 @@ export function useReturningGuestSync(
     setReturningCustomer(null);
     setLookedUpMobile("");
 
-    if (guestType !== "returning" || !session.companyId || !isValidPhone(mobile, countryCode)) {
+    if (guestType !== "returning" || !session.companyId || !isValidPhone(mobile, countryCode, country)) {
       return;
     }
 
@@ -160,7 +162,7 @@ export function useReturningGuestSync(
     return () => {
       cancelled = true;
     };
-  }, [countryCode, guestType, phoneReturn, session.companyId, returningFromDevice]);
+  }, [country, countryCode, guestType, phoneReturn, session.companyId, returningFromDevice]);
 
   return { isLookingUpGuest, setIsLookingUpGuest, returningCustomer, lookedUpMobile };
 }

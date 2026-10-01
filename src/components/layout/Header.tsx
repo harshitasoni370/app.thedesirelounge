@@ -49,18 +49,28 @@ export function Header() {
         </span>
       </Link>
 
-      {!hideCartIcon && (
-        <Link
-          to="/cart"
-          className="icon-btn header__cart"
-          aria-label="Open cart"
+      <div className="header__actions">
+        <a
+          href={URLS.website.home}
+          className="icon-btn header__home"
+          aria-label="Go to Desire home"
+          title="Home"
         >
-          <NavIcon name="cart" />
-          <span className={`badge${count > 0 ? " is-visible" : ""}`}>
-            {count}
-          </span>
-        </Link>
-      )}
+          <NavIcon name="home" />
+        </a>
+        {!hideCartIcon && (
+          <Link
+            to="/cart"
+            className="icon-btn header__cart"
+            aria-label="Open cart"
+          >
+            <NavIcon name="cart" />
+            <span className={`badge${count > 0 ? " is-visible" : ""}`}>
+              {count}
+            </span>
+          </Link>
+        )}
+      </div>
     </header>
   );
 }

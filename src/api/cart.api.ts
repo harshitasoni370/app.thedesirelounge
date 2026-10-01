@@ -13,8 +13,8 @@ export interface AddCartResult {
  * POST /Cart/addcart
  *
  * Adds one menu item to the guest's cart, creating the cart itself on
- * the first call. Payload matches the Postman collection exactly —
- * companyId, branchId, menuItemId, quantity.
+ * the first call. The first request omits cartId; subsequent requests
+ * send the cartId returned by the server.
  * Confirmed response shape: { id, status, message, type, data: { cartId, cartItemId } }.
  * Falls back to extractCartItems (matching this menuItemId in an
  * `items` array) only if a deployment ever returns that shape instead.
@@ -22,15 +22,13 @@ export interface AddCartResult {
 export async function addCartItem(params: {
   companyId: string;
   branchId: string;
+  cartId: string | null;
   menuItemId: string;
   quantity: number;
-  tableSessionId: string | null;
 }): Promise<AddCartResult> {
-  const { tableSessionId, ...cartParams } = params;
-  const payload: AddCartRequest = cartParams;
-  const res = await apiClient.post("/Cart/addcart", payload, {
-    headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
-  });
+  const { cartId: requestCartId, ...cartParams } = params;
+  const payload: AddCartRequest = requestCartId ? { ...cartParams, cartId: requestCartId } : cartParams;
+  const res = await apiClient.post("/Cart/addcart", payload);
   assertApiSuccess(res.data);
 
   const cartId = extractCartId(res.data);
