@@ -13,6 +13,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/domain-api": {
+        target: "https://fumesandflavoursapi.cylsysuat.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/domain-api/, "/api"),
+      },
       "/api": {
         target: "https://fumesandflavoursapi.cylsysuat.com",
         changeOrigin: true,

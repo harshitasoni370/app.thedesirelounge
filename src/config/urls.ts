@@ -19,12 +19,13 @@ export const URLS = {
   },
   api: {
     base: apiBaseUrl,
+    websiteByDomain: "/domain-api/WebsiteUrl/by-domain",
     qrContext: import.meta.env.VITE_QR_CONTEXT_API_URL || `${apiBaseUrl}/QR/qrcontext`,
     checkDevice: import.meta.env.VITE_CHECK_DEVICE_API_URL || `${apiBaseUrl}/QR/checkDevice`,
     imageBase: import.meta.env.VITE_IMAGE_BASE_URL || defaults.imageBaseUrl,
   },
   assets: {
-    logo: "https://restaurents-api.cylsys.com/Assets/theDesireLounge/Image/Logo/logo.webp",
+    logo: `${import.meta.env.VITE_IMAGE_BASE_URL || defaults.imageBaseUrl}/DES/Image/Logo/logo.webp`,
   },
   contact: {
     whatsapp: "https://wa.me/971509002202",
@@ -35,6 +36,7 @@ export const URLS = {
 };
 
 export const QR_CONTEXT_STORAGE_KEY = "desire_qr_context";
+export const TABLE_SESSION_STORAGE_KEY = "tableSessionId";
 export const QR_CONTEXT_PARAMS = ["type", "location", "name", "resturant"] as const;
 
 export const DEFAULT_COUNTRY_CODE = "+971";

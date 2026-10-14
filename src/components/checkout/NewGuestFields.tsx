@@ -176,25 +176,6 @@ export function NewGuestFields({
         </div>
       </div>
 
-      {isReservationCheckout && (
-        <div className="form-group">
-          <label className="form-label" htmlFor="input-email">
-            Email
-          </label>
-          <div className="field-input">
-            <input
-              id="input-email"
-              className="form-input"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => onEmailChange(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-      )}
-
       <div className="form-group">
         <label className="form-label" htmlFor="input-order-date">
           {isReservationCheckout ? "Reservation Date" : "Order Date"}

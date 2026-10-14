@@ -29,7 +29,7 @@ src/
   types/          api.types.ts (raw API shapes), menu.types.ts (normalized domain models),
                   cart.types.ts, session.types.ts
   context/        SessionContext (QR session), CartContext, ToastContext
-  config/         urls.ts (API/URL config), staticSession.ts (demo fallback)
+  config/         urls.ts (API/URL config), staticSession.ts (demo table details)
   store/          Redux Toolkit store and QR context slice
   hooks/          useCategories, useCategoryDetail, useSubCategoryDetail, useMenuItems, useHeaderScrolled
   components/     layout/ (Header, MenuBack, SessionGate), category/, menu/, cart/, checkout/, ui/
@@ -62,11 +62,28 @@ Flow:
    - `tableNumber` pre-fills the Table Number field at checkout.
    - `companyId`, `branchId` and the final table number are all stored
      on the placed order (`PlacedOrder` in `src/types/cart.types.ts`).
-4. Pages that need a branch to function (`Categories`, category landing,
-   `Menu`) are wrapped in `<SessionGate>`. If someone lands directly on
-   one of those routes without having tapped "Explore Menu" first (no
-   session saved yet), it shows a "go back to Home" nudge instead of
-   silently failing API calls.
+4. On direct app-domain visits, the app looks up `WebsiteUrl/by-domain`
+   using the current hostname and saves the returned company/branch IDs.
+   Its website identity (site name, logo, branch, contact details, country
+   code, address, timezone, theme JSON and remaining response fields) is
+   shared with the UI; branding, document metadata, checkout defaults and
+   contact links use the resolved domain configuration.
+   Menu API requests wait until those IDs match the current domain, so a
+   session saved for a different restaurant is never reused accidentally.
+5. Pages that need a branch to function (`Categories`, category landing,
+   `Menu`) are wrapped in `<SessionGate>`. If the domain lookup fails, the
+   app shows an error instead of silently calling the menu APIs with stale IDs.
+
+The `/domain-api/WebsiteUrl/by-domain` same-origin proxy is configured for
+Vite development, Vercel, and IIS deployments. Set `VITE_WEBSITE_DOMAIN` only
+when testing a specific tenant from a local hostname.
+For local tenant previews, pass `?websiteDomain=<tenant-hostname>` in
+development. The selected tenant is kept in the current browser tab while
+navigating between home and menu:
+
+- `http://localhost:5180/?websiteDomain=app-thedesirelounge.cylsysuat.com`
+- `http://localhost:5180/?websiteDomain=app-hookahpani.cylsysuat.com`
+- `http://localhost:5180/?websiteDomain=app-humtumkitchen.cylsysuat.com`
 
 For a different API environment, update `.env.local` or the centralized
 values in `src/config/urls.ts`; do not edit endpoint strings across pages.

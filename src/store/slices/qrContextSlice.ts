@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
-import { QR_CONTEXT_PARAMS, QR_CONTEXT_STORAGE_KEY, SHORT_PARAM_ALIASES, URLS } from "@/config/urls";
+import { QR_CONTEXT_PARAMS, QR_CONTEXT_STORAGE_KEY, SHORT_PARAM_ALIASES, TABLE_SESSION_STORAGE_KEY, URLS } from "@/config/urls";
 
 export interface CheckDevicePayload {
   deviceId: string;
@@ -155,6 +155,39 @@ function normalizeDob(raw: string | null | undefined): string | null {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : s.split(" ")[0] || null;
 }
 
+function persistTableSessionId(input: Record<string, string> | undefined | null, data: unknown): void {
+  const candidates = [
+    input?.sessionId,
+    input?.tableSessionId,
+    input?.["Table-Session-Id"],
+    input?.sid,
+  ];
+
+  const walk = (value: unknown): string | null => {
+    if (!value || typeof value !== "object") return null;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (["sessionId", "tableSessionId", "Table-Session-Id", "sid"].includes(key)) {
+        if (typeof child === "string" || typeof child === "number") return String(child);
+      }
+      const nested = walk(child);
+      if (nested) return nested;
+    }
+    return null;
+  };
+
+  const match = candidates.find((value) => Boolean(value)) ?? walk(data);
+
+  try {
+    if (match) {
+      localStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(match));
+      sessionStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(match));
+      return;
+    }
+    localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+  } catch {}
+}
+
 function unwrapDevicePayload(raw: unknown): CheckDeviceResponse | null {
   if (!raw || typeof raw !== "object") return null;
   const anyRaw = raw as Record<string, unknown>;
@@ -220,6 +253,7 @@ export const fetchQrContext = createAsyncThunk(
         const v = resolveParam(params, key);
         if (v) data[key] = v;
       });
+      persistTableSessionId(params, data);
       const context = { params, data, fetchedAt: new Date().toISOString(), deviceId };
       sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(context));
       return context;
@@ -230,6 +264,7 @@ export const fetchQrContext = createAsyncThunk(
         params: searchParams,
         signal,
       });
+      persistTableSessionId(params, response.data);
       const context = { params, data: response.data, fetchedAt: new Date().toISOString(), deviceId };
       sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(context));
       return context;

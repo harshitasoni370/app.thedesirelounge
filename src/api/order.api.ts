@@ -1,4 +1,4 @@
-import { apiClient } from "./axiosClient";
+import { api } from "./axiosClient";
 import { assertApiSuccess, extractOrderId } from "./normalize";
 import type { OrderConfirmation, PlaceOrderRequest } from "@/types/api.types";
 
@@ -36,7 +36,7 @@ export async function placeOrder(payload: PlaceOrderRequest): Promise<PlaceOrder
   const orderPayload: Omit<PlaceOrderRequest, "sessionId" | "companyId" | "branchId"> = normalizedDob
     ? { ...orderFields, dob: normalizedDob }
     : orderFields;
-  const res = await apiClient.post("/Order/order", orderPayload);
+  const res = await api({ method: "post", url: "/Order/order", data: orderPayload });
   assertApiSuccess(res.data);
   const data = (res.data as { data?: { orderId?: string; orderNo?: string } } | null)?.data;
   return {
@@ -54,7 +54,7 @@ export async function placeOrder(payload: PlaceOrderRequest): Promise<PlaceOrder
  * { order: { orderId, orderNo, tableNo, ... }, items: [{ itemName, quantity, ... }] }
  */
 export async function getOrderConfirmation(orderId: string): Promise<OrderConfirmation | null> {
-  const res = await apiClient.get("/Order/getOrderConfirmationID", { params: { orderId } });
+  const res = await api({ method: "get", url: "/Order/getOrderConfirmationID", params: { orderId } });
   const payload = res.data as OrderConfirmation | null;
   if (!payload?.order) return null;
   return { order: payload.order, items: payload.items ?? [] };

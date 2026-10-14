@@ -1,4 +1,4 @@
-import { apiClient } from "./axiosClient";
+import { api } from "./axiosClient";
 import type { CreateReservationRequest, ReservationApiRecord } from "@/types/api.types";
 import { DEFAULT_COUNTRY_CODE } from "@/config/urls";
 
@@ -40,7 +40,10 @@ export async function createReservation(
     deviceId: payload.deviceId || extraDeviceId || "",
   };
 
-  const res = await apiClient.post("/Reservation/CraeteReservation", normalized, {
+  const res = await api({
+    method: "post",
+    url: "/Reservation/CraeteReservation",
+    data: normalized,
     headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
   });
   const body = res.data as { data?: ReservationApiRecord; result?: ReservationApiRecord } & ReservationApiRecord;

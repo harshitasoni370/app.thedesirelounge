@@ -22,7 +22,11 @@ interface ReturningFromDeviceLike {
   dateOfBirth?: string | null;
 }
 
-export function useCheckoutParams(session: SessionLike, returningFromDevice: ReturningFromDeviceLike | null) {
+export function useCheckoutParams(
+  session: SessionLike,
+  returningFromDevice: ReturningFromDeviceLike | null,
+  defaultCountryCode = DEFAULT_COUNTRY_CODE,
+) {
   const location = useLocation();
   const checkoutParams = new URLSearchParams(location.search);
 
@@ -37,12 +41,12 @@ export function useCheckoutParams(session: SessionLike, returningFromDevice: Ret
   const reservationCompanyId =
     readParam("companyId", "companyID", "uidCompanyId") ||
     session.companyId ||
-    "0ffbe39e-abf8-4827-9107-1a04b39f3416";
+    "";
 
   const reservationBranchId =
     readParam("branchId", "branchID", "uidBranchId") ||
     session.branchId ||
-    "f4fb1d76-83a0-4965-86b5-63da28249dae";
+    "";
 
   const reservationSessionId =
     readParam("tableSessionId", "sessionId", "Table-Session-Id") || session.sessionId || null;
@@ -64,7 +68,7 @@ export function useCheckoutParams(session: SessionLike, returningFromDevice: Ret
     readParam("countryCode", "CountryCode") ||
     (returningFromDevice?.countryCode && returningFromDevice.countryCode.length > 1
       ? returningFromDevice.countryCode
-      : DEFAULT_COUNTRY_CODE);
+      : defaultCountryCode);
   const urlPeople = readParam("guestCount", "people");
   const urlDob = readParam("dob", "dateOfBirth");
   const urlEmail = readParam("email");

@@ -35,6 +35,7 @@ import {
   buildOrderWhatsAppMessage,
   buildReservationWhatsAppMessage,
 } from "@/utils/whatsapp";
+import { DEFAULT_COUNTRY_CODE } from "@/config/urls";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { checkDevice, selectReturningCustomer, selectDeviceId, selectCheckDeviceStatus } from "@/store/slices/qrContextSlice";
 
@@ -46,7 +47,7 @@ export function CheckoutPage() {
   const dispatch = useAppDispatch();
 
   const { items, count, total, cartId, clearCart, rebuildServerCart } = useCart();
-  const { session, setTableNumber, deviceId: ctxDeviceId } = useSession();
+  const { session, websiteConfig, setTableNumber, deviceId: ctxDeviceId } = useSession();
   const { showToast } = useToast();
 
   const returningFromDevice = useAppSelector(selectReturningCustomer);
@@ -67,7 +68,7 @@ export function CheckoutPage() {
   };
 
   // All URL-param reading + derived booking-type flags live here now.
-  const p = useCheckoutParams(session, returningFromDevice);
+  const p = useCheckoutParams(session, returningFromDevice, websiteConfig?.countryCode || undefined);
 
   const isReturningGuestFromUrl =
     [p.readParam("guestType"), p.readParam("customerType")].some((v) => v?.toLowerCase() === "returning") ||
@@ -92,6 +93,9 @@ export function CheckoutPage() {
   const [name, setName] = useState(p.urlName || (returningFromDevice?.guestName ?? ""));
   const [countryCode, setCountryCode] = useState(p.urlCountryCode);
   const [country, setCountry] = useState<CountryCode>(() => getCountryForCallingCode(p.urlCountryCode));
+  const hasCountryCodeOverride = Boolean(
+    p.readParam("countryCode", "CountryCode") || returningFromDevice?.countryCode
+  );
   const [phone, setPhone] = useState(p.urlPhone || (returningFromDevice?.mobile ?? ""));
   const [people, setPeople] = useState(p.urlPeople);
   const [table, setTable] = useState(p.urlTable || session.tableNumber || "");
@@ -180,6 +184,13 @@ export function CheckoutPage() {
       setGuestType,
     }
   );
+  useEffect(() => {
+    const configuredCountryCode = websiteConfig?.countryCode;
+    if (!configuredCountryCode || hasCountryCodeOverride) return;
+    setCountryCode((current) =>
+      current === DEFAULT_COUNTRY_CODE ? configuredCountryCode : current
+    );
+  }, [hasCountryCodeOverride, websiteConfig?.countryCode]);
   useEffect(() => {
     if (`+${getCountryCallingCode(country)}` !== countryCode) {
       setCountry(getCountryForCallingCode(countryCode, country));
@@ -277,13 +288,16 @@ export function CheckoutPage() {
         notifyWhatsApp(
           buildReservationWhatsAppMessage({
             reservationTitle: title,
+            restaurantName: websiteConfig?.siteName || websiteConfig?.companyName || undefined,
             guestName: checkout.name || "Guest",
             mobile: checkout.phone,
             countryCode: checkout.countryCode,
             reservationDateTime: `${defaultedDate} ${defaultedTime}`,
             table: checkout.table,
             peopleCount: checkout.people,
-          })
+          }),
+          websiteConfig?.phone,
+          websiteConfig?.countryCode
         );
 
         if (!isCombinedSubmit) {
@@ -411,12 +425,15 @@ export function CheckoutPage() {
     notifyWhatsApp(
       buildOrderWhatsAppMessage({
         orderNo,
+        restaurantName: websiteConfig?.siteName || websiteConfig?.companyName || undefined,
         guestName: checkout.name || "Guest",
         mobile: checkout.phone,
         countryCode: checkout.countryCode,
         table: checkout.table,
         peopleCount: checkout.people,
-      })
+      }),
+      websiteConfig?.phone,
+      websiteConfig?.countryCode
     );
 
     clearCart();

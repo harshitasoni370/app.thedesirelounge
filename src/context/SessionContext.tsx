@@ -11,18 +11,60 @@ import {
 import { readLocal, writeLocal } from "@/utils/storage";
 import { EMPTY_SESSION, type DiningSession } from "@/types/session.types";
 import { STATIC_SESSION } from "@/config/staticSession";
+import { TABLE_SESSION_STORAGE_KEY, URLS } from "@/config/urls";
 import { createTableSession } from "@/api/tableSession.api";
 import { getOrCreateDeviceId } from "@/utils/deviceId";
+import { getImageUrl } from "@/utils/imageUrl";
 
 const SESSION_KEY = "ff_session_v1";
+const LOCAL_WEBSITE_DOMAIN_KEY = "ff_local_website_domain";
+
+interface WebsiteConfig {
+  websiteUrlId: string | null;
+  companyId: string;
+  companyName: string | null;
+  branchId: string;
+  branchName: string | null;
+  domain: string | null;
+  appType: string | null;
+  siteName: string | null;
+  logoUrl: string | null;
+  themeJson: string | null;
+  countryCode: string | null;
+  phone: string | null;
+  address: string | null;
+  timezone: string | null;
+  raw: unknown;
+}
+
+type WebsiteConfigStatus = "loading" | "succeeded" | "failed";
+
+function readConfigValue(value: unknown, keys: string[]): string | null {
+  if (!value || typeof value !== "object") return null;
+  const wanted = new Set(keys.map((key) => key.toLowerCase()));
+
+  for (const [key, child] of Object.entries(value)) {
+    if (wanted.has(key.toLowerCase()) && (typeof child === "string" || typeof child === "number")) {
+      return String(child);
+    }
+  }
+  for (const child of Object.values(value)) {
+    const nested = readConfigValue(child, keys);
+    if (nested) return nested;
+  }
+  return null;
+}
 
 interface SessionContextValue {
   session: DiningSession;
   isReady: boolean;
-  /** true once we have a branchId to call the menu API with */
+  /** True once the current domain (or QR context) supplies tenant IDs. */
   hasSession: boolean;
-  /** Saves the (currently static) session data. Called when the guest taps "Explore Menu". */
-  captureSession: () => void;
+  /** Saves the current tenant session when the guest enters the menu. */
+  captureSession: () => boolean;
+  websiteConfig: WebsiteConfig | null;
+  websiteConfigStatus: WebsiteConfigStatus;
+  websiteConfigError: string | null;
   setTableNumber: (table: string) => void;
   clearSession: () => void;
   deviceId: string | null;
@@ -31,10 +73,8 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
 /**
- * QR context is fetched by Redux and converted into the session fields
- * consumed by the category, cart, reservation and order APIs. The static
- * values remain only as a local fallback when the home-page demo is used
- * without a QR URL.
+ * Direct visits resolve tenant IDs from WebsiteUrl/by-domain. QR context
+ * continues to supply its own tenant and table values when present.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -56,15 +96,98 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const deviceId = storeDeviceId || readUrlParam("deviceId");
   const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
   const hasQrUrl = Boolean(urlParams.get("type")) || hasForwardedContext;
-  // Website se seedha aaya (company+branch hai, par na QR type, na tableId/sessionId)
-  // => direct flow: koi table session nahi, header me Table-Session-Id nahi.
-  const isDirectEntry = Boolean(companyId && branchId) && !hasQrUrl;
+  const localDomainOverrideParam = import.meta.env.DEV
+    ? urlParams.get("websiteDomain")?.trim()
+    : null;
+  const localDomainOverride =
+    localDomainOverrideParam ||
+    (import.meta.env.DEV ? sessionStorage.getItem(LOCAL_WEBSITE_DOMAIN_KEY) : null);
+  const domain =
+    localDomainOverride ||
+    import.meta.env.VITE_WEBSITE_DOMAIN?.trim() ||
+    window.location.hostname;
+  const [websiteConfig, setWebsiteConfig] = useState<WebsiteConfig | null>(null);
+  const [websiteConfigStatus, setWebsiteConfigStatus] = useState<WebsiteConfigStatus>("loading");
+  const [websiteConfigError, setWebsiteConfigError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (localDomainOverrideParam) {
+      sessionStorage.setItem(LOCAL_WEBSITE_DOMAIN_KEY, localDomainOverrideParam);
+    }
+    const controller = new AbortController();
+    setWebsiteConfig(null);
+    setWebsiteConfigStatus("loading");
+    setWebsiteConfigError(null);
+
+    fetch(`${URLS.api.websiteByDomain}?domain=${encodeURIComponent(domain)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Website configuration request failed (${response.status})`);
+        }
+        return response.json() as Promise<unknown>;
+      })
+      .then((payload) => {
+        const config: WebsiteConfig = {
+          websiteUrlId: readConfigValue(payload, ["websiteUrlId", "uidWebsiteUrlId"]),
+          companyId: readConfigValue(payload, ["companyId", "uidCompanyId", "companyID"]) || "",
+          companyName: readConfigValue(payload, ["companyName", "strCompanyName"]),
+          branchId: readConfigValue(payload, ["branchId", "uidBranchId", "branchID"]) || "",
+          branchName: readConfigValue(payload, ["branchName", "strBranchName"]),
+          domain: readConfigValue(payload, ["domain"]),
+          appType: readConfigValue(payload, ["appType"]),
+          siteName: readConfigValue(payload, ["siteName", "websiteName", "strSiteName"]),
+          logoUrl: readConfigValue(payload, ["logoUrl", "logo", "strLogoUrl"]),
+          themeJson: readConfigValue(payload, ["themeJson"]),
+          countryCode: readConfigValue(payload, ["countryCode", "CountryCode"]),
+          phone: readConfigValue(payload, ["phone", "mobile", "phoneNumber"]),
+          address: readConfigValue(payload, ["address"]),
+          timezone: readConfigValue(payload, ["timezone", "timeZone"]),
+          raw: payload,
+        };
+        if (!config.companyId || !config.branchId) {
+          throw new Error(`Website configuration for ${domain} did not include company and branch IDs`);
+        }
+        setWebsiteConfig(config);
+        setWebsiteConfigStatus("succeeded");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Could not load website configuration for ${domain}`, error);
+        setWebsiteConfigError(message);
+        setWebsiteConfigStatus("failed");
+      });
+
+    return () => controller.abort();
+  }, [domain, localDomainOverrideParam]);
+
+  useEffect(() => {
+    if (!websiteConfig) return;
+    const siteName = websiteConfig.siteName || websiteConfig.companyName;
+    if (siteName) document.title = siteName;
+
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const logoUrl = websiteConfig.logoUrl ? getImageUrl(websiteConfig.logoUrl) : undefined;
+    if (favicon && logoUrl) favicon.href = logoUrl;
+
+    const description = [siteName, websiteConfig.branchName, websiteConfig.address]
+      .filter(Boolean)
+      .join(" - ");
+    const descriptionTag = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (descriptionTag && description) descriptionTag.content = description;
+  }, [websiteConfig]);
+
+  const isDirectEntry =
+    !hasQrUrl &&
+    Boolean((websiteConfig?.companyId && websiteConfig.branchId) || (companyId && branchId));
   const buildDirectSession = (): DiningSession => ({
     ...EMPTY_SESSION,
-    companyId: companyId || "",
-    companyName: resolveParam(urlParams, "companyName"),
-    branchId: branchId || "",
-    branchName: resolveParam(urlParams, "branchName"),
+    companyId: websiteConfig?.companyId || companyId || "",
+    companyName: websiteConfig?.companyName || resolveParam(urlParams, "companyName"),
+    branchId: websiteConfig?.branchId || branchId || "",
+    branchName: websiteConfig?.branchName || resolveParam(urlParams, "branchName"),
     source: "direct",
     capturedFrom: window.location.href,
   });
@@ -112,14 +235,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     }
     dispatch(fetchQrContext(location.search));
-  }, [branchId, companyId, dispatch, hasForwardedContext, hasQrUrl, isDirectEntry, location.search, sessionId, tableId]);
+  }, [
+    branchId,
+    companyId,
+    dispatch,
+    hasForwardedContext,
+    hasQrUrl,
+    isDirectEntry,
+    location.search,
+    sessionId,
+    tableId,
+    websiteConfig,
+  ]);
+
+  // QR flow me companyId URL me nahi hota (sirf type/location/name aata hai) ya
+  // /cart, /checkout jaise pages pe URL params hat jaate hain. Isliye QR ke liye
+  // session.companyId pe fallback. Direct flow ka behaviour same rakha hai
+  // (sirf URL ka companyId).
+  const checkDeviceCompanyId = companyId || (session.source === "qr" ? session.companyId : null);
 
   useEffect(() => {
-    if (!deviceId || !companyId) return;
+    if (!deviceId || !checkDeviceCompanyId) return;
     if (qrContext.device.status === "idle") {
-      dispatch(checkDevice({ deviceId, companyId }));
+      dispatch(checkDevice({ deviceId, companyId: checkDeviceCompanyId }));
     }
-  }, [companyId, deviceId, dispatch, qrContext.device.status]);
+  }, [checkDeviceCompanyId, deviceId, dispatch, qrContext.device.status]);
 
   useEffect(() => {
     if (qrContext.status !== "succeeded" || !qrContext.data) return;
@@ -194,18 +334,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const persist = (next: DiningSession) => {
     writeLocal(SESSION_KEY, next);
+    if (next.source === "qr" && next.sessionId) {
+      localStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(next.sessionId));
+      sessionStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(next.sessionId));
+    } else {
+      localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+    }
     setSession(next);
   };
 
-  const captureSession = () => {
-    if (qrContext.status === "succeeded" && qrContext.data) return;
+  const captureSession = (): boolean => {
+    if (hasQrUrl) {
+      return Boolean(
+        (qrContext.status === "succeeded" && qrContext.data) ||
+          (session.companyId && session.branchId)
+      );
+    }
+    if (websiteConfigStatus !== "succeeded" || !websiteConfig) return false;
+
     const next: DiningSession = {
       ...session,
       ...STATIC_SESSION,
-      source: session.source === "qr" ? "qr" : "direct",
+      companyId: websiteConfig.companyId,
+      companyName: websiteConfig.companyName,
+      branchId: websiteConfig.branchId,
+      branchName: websiteConfig.branchName,
+      source: "direct",
       updatedAt: new Date().toISOString(),
     };
     persist(next);
+    return true;
   };
 
   const setTableNumber = (table: string) => {
@@ -213,11 +372,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   const clearSession = () => {
+    localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
     persist(EMPTY_SESSION);
   };
 
-  const hasSession = Boolean(session.companyId && session.branchId);
-  const isReady = !hasQrUrl || qrContext.status === "succeeded" || qrContext.status === "failed";
+  const hasSession = Boolean(
+    session.companyId &&
+      session.branchId &&
+      (hasQrUrl
+        ? session.source === "qr"
+        : websiteConfigStatus === "succeeded" &&
+          session.companyId === websiteConfig?.companyId &&
+          session.branchId === websiteConfig.branchId)
+  );
+  const isReady = hasQrUrl
+    ? qrContext.status === "succeeded" || qrContext.status === "failed"
+    : websiteConfigStatus === "failed" || (websiteConfigStatus === "succeeded" && hasSession);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -225,11 +396,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       isReady,
       hasSession,
       captureSession,
+      websiteConfig,
+      websiteConfigStatus,
+      websiteConfigError,
       setTableNumber,
       clearSession,
       deviceId,
     }),
-    [session, isReady, hasSession, deviceId]
+    [session, isReady, hasSession, captureSession, websiteConfig, websiteConfigStatus, websiteConfigError, deviceId]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

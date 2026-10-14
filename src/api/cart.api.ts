@@ -1,4 +1,4 @@
-import { apiClient } from "./axiosClient";
+import { api, getTableSessionId } from "./axiosClient";
 import { assertApiSuccess, extractCartId, extractCartItemId, extractCartItems } from "./normalize";
 import type { AddCartRequest, RemoveCartItemRequest, UpdateCartQuantityRequest } from "@/types/api.types";
 import type { CartItem } from "@/types/cart.types";
@@ -27,8 +27,12 @@ export async function addCartItem(params: {
   quantity: number;
 }): Promise<AddCartResult> {
   const { cartId: requestCartId, ...cartParams } = params;
-  const payload: AddCartRequest = requestCartId ? { ...cartParams, cartId: requestCartId } : cartParams;
-  const res = await apiClient.post("/Cart/addcart", payload);
+  // QR flow: Table-Session-Id header jaa raha hai => cartId NAHI bhejna (server session se cart resolve karta hai).
+  // Direct flow: header nahi jaata => cartId bhejna (agar pehle se hai).
+  const sendsTableSession = Boolean(getTableSessionId());
+  const payload: AddCartRequest =
+    requestCartId && !sendsTableSession ? { ...cartParams, cartId: requestCartId } : cartParams;
+  const res = await api({ method: "post", url: "/Cart/addcart", data: payload });
   assertApiSuccess(res.data);
 
   const cartId = extractCartId(res.data);
@@ -44,20 +48,22 @@ export async function addCartItem(params: {
 /** DELETE /Cart/removeitem */
 export async function removeCartItem(cartId: string, cartItemId: string): Promise<void> {
   const payload: RemoveCartItemRequest = { cartId, cartItemId };
-  const res = await apiClient.delete("/Cart/removeitem", { data: payload });
+  const res = await api({ method: "delete", url: "/Cart/removeitem", data: payload });
   assertApiSuccess(res.data);
 }
 
 /** POST /Cart/updatequantity (per the Postman collection — NOT PUT) */
 export async function updateCartQuantity(cartId: string, cartItemId: string, quantity: number): Promise<void> {
   const payload: UpdateCartQuantityRequest = { cartId, cartItemId, quantity };
-  const res = await apiClient.post("/Cart/updatequantity", payload);
+  const res = await api({ method: "post", url: "/Cart/updatequantity", data: payload });
   assertApiSuccess(res.data);
 }
 
 /** GET /Cart/getcartitems/{cartId} — used to re-hydrate the cart on page load. */
 export async function getCartItems(cartId: string, tableSessionId?: string | null): Promise<CartItem[]> {
-  const res = await apiClient.get(`/Cart/getcartitems/${cartId}`, {
+  const res = await api({
+    method: "get",
+    url: `/Cart/getcartitems/${cartId}`,
     headers: tableSessionId ? { "Table-Session-Id": tableSessionId } : undefined,
   });
   assertApiSuccess(res.data);

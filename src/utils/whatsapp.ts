@@ -12,9 +12,22 @@ import { URLS } from "@/config/urls";
  * andar hi replace kiya ja sakta hai — baaki app is function ko as-is call
  * karta rahega.
  */
-export function notifyWhatsApp(message: string): void {
+export function notifyWhatsApp(
+  message: string,
+  phone?: string | null,
+  countryCode?: string | null,
+): void {
   try {
-    const url = URLS.contact.whatsappBooking(message);
+    const phoneDigits = phone?.replace(/\D/g, "");
+    const countryDigits = countryCode?.replace(/\D/g, "") || "";
+    const number = phoneDigits
+      ? phoneDigits.startsWith(countryDigits) && countryDigits
+        ? phoneDigits
+        : `${countryDigits}${phoneDigits}`
+      : null;
+    const url = number
+      ? `https://wa.me/${number}?text=${encodeURIComponent(message)}`
+      : URLS.contact.whatsappBooking(message);
     window.open(url, "_blank", "noopener,noreferrer");
   } catch {
     // Popup blocked ya window unavailable (e.g. SSR) — silently ignore,
@@ -24,6 +37,7 @@ export function notifyWhatsApp(message: string): void {
 
 export function buildOrderWhatsAppMessage(params: {
   orderNo?: string | null;
+  restaurantName?: string;
   guestName: string;
   mobile: string;
   countryCode: string;
@@ -31,7 +45,7 @@ export function buildOrderWhatsAppMessage(params: {
   peopleCount?: string;
 }): string {
   const lines = [
-    "New Order — The Desire Lounge",
+    `New Order — ${params.restaurantName || "The Desire Lounge"}`,
     params.orderNo ? `Order No: ${params.orderNo}` : null,
     `Guest: ${params.guestName}`,
     `Mobile: ${params.countryCode} ${params.mobile}`,
@@ -44,6 +58,7 @@ export function buildOrderWhatsAppMessage(params: {
 
 export function buildReservationWhatsAppMessage(params: {
   reservationTitle: string;
+  restaurantName?: string;
   guestName: string;
   mobile: string;
   countryCode: string;
@@ -52,7 +67,7 @@ export function buildReservationWhatsAppMessage(params: {
   peopleCount?: string;
 }): string {
   const lines = [
-    `New Reservation — ${params.reservationTitle}`,
+    `New Reservation — ${params.restaurantName || "The Desire Lounge"} — ${params.reservationTitle}`,
     `Guest: ${params.guestName}`,
     `Mobile: ${params.countryCode} ${params.mobile}`,
     params.reservationDateTime

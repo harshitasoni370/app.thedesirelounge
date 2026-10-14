@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/domain-api/WebsiteUrl/by-domain",
+      "destination": "https://fumesandflavoursapi.cylsysuat.com/api/WebsiteUrl/by-domain"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

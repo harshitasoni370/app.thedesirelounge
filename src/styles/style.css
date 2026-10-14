@@ -489,6 +489,27 @@ a.chip {
   background: var(--accent);
 }
 
+.hero__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin-top: 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.hero__contact a {
+  color: var(--text-soft);
+}
+
+.hero__contact a:hover,
+.hero__contact a:focus-visible {
+  color: var(--accent);
+}
+
 .hero__divider {
   display: block;
   width: clamp(96px, 18vw, 140px);
