@@ -76,6 +76,8 @@ export function useReturningGuestSync(
   useEffect(() => {
     if (!returningFromDevice || !session.companyId) return;
 
+    setGuestType("returning");
+
     if (returningFromDevice.guestName) {
       setName((prev) => prev || returningFromDevice.guestName!);
     }
@@ -106,7 +108,14 @@ export function useReturningGuestSync(
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [returningFromDevice?.customerId, session.companyId]);
+  }, [
+    returningFromDevice?.customerId,
+    returningFromDevice?.guestName,
+    returningFromDevice?.countryCode,
+    returningFromDevice?.mobile,
+    returningFromDevice?.dateOfBirth,
+    session.companyId,
+  ]);
 
   // Table number can resolve after mount — keep it synced.
   useEffect(() => {

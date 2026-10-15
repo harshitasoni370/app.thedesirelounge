@@ -20,7 +20,7 @@ export function Header() {
   const websiteDomain = websiteConfig?.domain?.trim();
   const websiteHomeUrl = websiteDomain
     ? `${/^https?:\/\//i.test(websiteDomain) ? "" : "https://"}${websiteDomain}`
-    : URLS.website.home;
+    : undefined;
 
   const params = new URLSearchParams(location.search);
   const reservationCategory = params.get("reservationCategory");
@@ -67,6 +67,7 @@ export function Header() {
           href={websiteHomeUrl}
           className="icon-btn header__home"
           aria-label={`Go to ${siteName} home`}
+          aria-disabled={!websiteHomeUrl}
           title="Home"
         >
           <NavIcon name="home" />

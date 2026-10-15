@@ -3,6 +3,7 @@ import { TABLE_SESSION_STORAGE_KEY, URLS } from "@/config/urls";
 
 // Must match SESSION_KEY in SessionContext.tsx
 const SESSION_STORAGE_KEY = "ff_session_v1";
+const ZERO_SESSION_ID = "00000000-0000-0000-0000-000000000000";
 
 const SESSION_REQUIRED_PATHS = [
   /\/Cart\/addcart/i,
@@ -39,45 +40,56 @@ if (!import.meta.env.VITE_API_BASE_URL && !import.meta.env.DEV) {
  *     ka `source` dekho. QR scan ke baad internal navigation me URL params
  *     hat jaate hain, isliye sirf URL pe depend karne se header chhoot raha tha.
  */
+function readSavedSession(): { source?: string; sessionId?: string | null; companyId?: string | null; branchId?: string | null } | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as ReturnType<typeof readSavedSession> : null;
+  } catch {
+    return null;
+  }
+}
+
 function hasQrFlowContext(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
-    const hasType = Boolean(params.get("type"));
-    const hasCompany = Boolean(
-      params.get("companyId") || params.get("companyID") || params.get("uidCompanyId") || params.get("cid")
-    );
-    const hasBranch = Boolean(
-      params.get("branchId") || params.get("branchID") || params.get("uidBranchId") || params.get("bid")
-    );
+    const getParam = (...keys: string[]) => {
+      const wanted = new Set(keys.map((key) => key.toLowerCase()));
+      for (const [key, value] of params.entries()) {
+        if (wanted.has(key.toLowerCase()) && value.trim()) return value.trim();
+      }
+      return "";
+    };
+    const hasType = Boolean(getParam("type"));
+    const companyId = getParam("companyId", "companyID", "uidCompanyId", "cid");
+    const branchId = getParam("branchId", "branchID", "uidBranchId", "bid");
     const hasTableOrSession = Boolean(
-      params.get("tableId") ||
-        params.get("tableID") ||
-        params.get("uidTableId") ||
-        params.get("tid") ||
-        params.get("sessionId") ||
-        params.get("tableSessionId") ||
-        params.get("Table-Session-Id") ||
-        params.get("sid")
+      getParam("tableId", "tableID", "uidTableId", "tid", "sessionId", "tableSessionId", "Table-Session-Id", "sid")
     );
 
-    if (hasType || (hasCompany && hasBranch && hasTableOrSession)) return true;
-    // Website se direct aaya (company + branch, par QR/table nahi) => direct flow.
-    if (hasCompany && hasBranch) return false;
+    if (hasType || (companyId && branchId && hasTableOrSession)) return true;
+    if (companyId && branchId) {
+      const saved = readSavedSession();
+      return Boolean(
+        saved?.source === "qr" &&
+        saved.companyId?.toLowerCase() === companyId.toLowerCase() &&
+        saved.branchId?.toLowerCase() === branchId.toLowerCase()
+      );
+    }
   } catch {
     return false;
   }
 
-  // URL me koi context nahi -> saved session se decide karo.
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return false;
-    const saved = JSON.parse(raw) as { source?: string; sessionId?: string | null } | null;
-    if (!saved) return false;
-    if (saved.source === "qr") return true;
-    // Purani saved session (source field aane se pehle ki) jisme sessionId ho => QR hi thi.
-    if (!saved.source && saved.sessionId) return true;
-  } catch {}
+  const saved = readSavedSession();
+  if (saved?.source === "qr") return true;
+  // Older saved QR sessions predate the source field.
+  if (!saved?.source && saved?.sessionId) return true;
   return false;
+}
+
+function isUsableTableSessionId(value: unknown): value is string {
+  return typeof value === "string" &&
+    Boolean(value.trim()) &&
+    value.trim().toLowerCase() !== ZERO_SESSION_ID;
 }
 
 export function getTableSessionId(): string | null {
@@ -87,7 +99,8 @@ export function getTableSessionId(): string | null {
     const localValue = localStorage.getItem(TABLE_SESSION_STORAGE_KEY);
     if (localValue) {
       const parsed = JSON.parse(localValue);
-      return typeof parsed === "string" ? parsed : String(parsed);
+      const value = typeof parsed === "string" ? parsed : String(parsed);
+      if (isUsableTableSessionId(value)) return value.trim();
     }
   } catch {}
 
@@ -95,18 +108,20 @@ export function getTableSessionId(): string | null {
     const sessionValue = sessionStorage.getItem(TABLE_SESSION_STORAGE_KEY);
     if (sessionValue) {
       const parsed = JSON.parse(sessionValue);
-      return typeof parsed === "string" ? parsed : String(parsed);
+      const value = typeof parsed === "string" ? parsed : String(parsed);
+      if (isUsableTableSessionId(value)) return value.trim();
     }
   } catch {}
 
-  return null;
+  const saved = readSavedSession();
+  return isUsableTableSessionId(saved?.sessionId) ? saved.sessionId.trim() : null;
 }
 
 export function setTableSessionId(value: string | null): void {
   try {
-    if (value) {
-      localStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(value));
-      sessionStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(value));
+    if (isUsableTableSessionId(value)) {
+      localStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(value.trim()));
+      sessionStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(value.trim()));
       return;
     }
     localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
@@ -117,11 +132,12 @@ export function setTableSessionId(value: string | null): void {
 export function api<T = unknown>(config: AxiosRequestConfig) {
   const url = config.url || "";
   const rawHeaders = (config.headers && typeof config.headers === "object" ? config.headers : {}) as Record<string, unknown>;
-  const explicitTableSessionId =
+  const explicitTableSessionId = [
     (rawHeaders["Table-Session-Id"] as string | undefined) ||
     (rawHeaders["tableSessionId"] as string | undefined) ||
     (rawHeaders["table-session-id"] as string | undefined) ||
-    null;
+    null,
+  ].find(isUsableTableSessionId) || null;
   const qrFlow = hasQrFlowContext();
   const tableSessionId = explicitTableSessionId || getTableSessionId();
 

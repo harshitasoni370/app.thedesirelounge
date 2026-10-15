@@ -175,7 +175,10 @@ function persistTableSessionId(input: Record<string, string> | undefined | null,
     return null;
   };
 
-  const match = candidates.find((value) => Boolean(value)) ?? walk(data);
+  const sessionCandidates: Array<string | null | undefined> = [...candidates, walk(data)];
+  const match = sessionCandidates.find(
+    (value) => value && value.trim() !== "00000000-0000-0000-0000-000000000000",
+  );
 
   try {
     if (match) {
@@ -205,20 +208,99 @@ function unwrapDevicePayload(raw: unknown): CheckDeviceResponse | null {
   };
 }
 
+function readQueryParam(params: Record<string, string>, key: string): string {
+  const match = Object.keys(params).find((paramKey) => paramKey.toLowerCase() === key.toLowerCase());
+  return match ? params[match].trim() : "";
+}
+
+export const TABLE_OCCUPIED_ERROR = "This table is already booked.";
+const ZERO_SESSION_ID = "00000000-0000-0000-0000-000000000000";
+
+function isReusableSessionId(value: string | null | undefined): value is string {
+  return Boolean(value && value.trim().toLowerCase() !== ZERO_SESSION_ID);
+}
+
+function qrSessionStorageKey(domain: string, tableCode: string): string {
+  return `desire_qr_session:${domain.toLowerCase()}:${tableCode.toLowerCase()}`;
+}
+
+function readSavedQrSessionId(domain: string, tableCode: string): string {
+  const key = qrSessionStorageKey(domain, tableCode);
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const value = storage.getItem(key);
+      if (isReusableSessionId(value)) return value;
+      if (value) storage.removeItem(key);
+    } catch {
+      // Try the other browser storage.
+    }
+  }
+  return "";
+}
+
+function saveQrSessionId(domain: string, tableCode: string, sessionId: string): void {
+  const key = qrSessionStorageKey(domain, tableCode);
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      storage.setItem(key, sessionId);
+    } catch {
+      // The other browser storage may still be available.
+    }
+  }
+}
+
+function clearSavedQrSessionId(domain: string, tableCode: string): void {
+  const key = qrSessionStorageKey(domain, tableCode);
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // Storage can be unavailable in private browsing.
+    }
+  }
+}
+
+function readResponseValue(value: unknown, keys: string[]): string {
+  if (!value || typeof value !== "object") return "";
+  const wanted = new Set(keys.map((key) => key.toLowerCase()));
+  for (const [key, child] of Object.entries(value)) {
+    if (wanted.has(key.toLowerCase()) && child !== null && child !== undefined) return String(child).trim();
+    const nested = readResponseValue(child, keys);
+    if (nested) return nested;
+  }
+  return "";
+}
+
+function isOccupiedContext(data: unknown): boolean {
+  const sessionId = readResponseValue(data, ["sessionId", "tableSessionId", "uidSessionId"]);
+  const sessionStatus = readResponseValue(data, ["sessionStatus"]);
+  return sessionId.toLowerCase() === ZERO_SESSION_ID && sessionStatus.toLowerCase() === "occupied";
+}
+
 export const fetchQrContext = createAsyncThunk(
   "qrContext/fetch",
-  async (search: string, { signal, rejectWithValue }) => {
+  async ({ search, domain }: { search: string; domain: string }, { signal, rejectWithValue }) => {
     const searchParams = new URLSearchParams(search);
     const params = Object.fromEntries(searchParams.entries());
-    const readParam = (...keys: string[]) => keys.some((key) => Boolean(params[key]) || Boolean(resolveParam(params, key)));
+    const tableCode =
+      readQueryParam(params, "tableCode") ||
+      readQueryParam(params, "tableNo") ||
+      readQueryParam(params, "tableNumber") ||
+      readQueryParam(params, "name");
+    const readParam = (...keys: string[]) =>
+      keys.some((key) => Boolean(readQueryParam(params, key)) || Boolean(resolveParam(params, key)));
     const hasForwardedContext =
       readParam("companyId", "companyID", "uidCompanyId", "cid") &&
       readParam("branchId", "branchID", "uidBranchId", "bid") &&
       (readParam("tableId", "tableID", "uidTableId", "tid") ||
         readParam("sessionId", "tableSessionId", "Table-Session-Id", "sid"));
-    if (!QR_CONTEXT_PARAMS.some((key) => params[key]) && !hasForwardedContext) return null;
+    if (!QR_CONTEXT_PARAMS.some((key) => readQueryParam(params, key)) && !hasForwardedContext) return null;
 
     const deviceId = extractDeviceId(search, params);
+    const requestDomain = readQueryParam(params, "domain") || domain || window.location.hostname;
+    const savedSessionId = tableCode ? readSavedQrSessionId(requestDomain, tableCode) : "";
+    const requestedSessionId = readQueryParam(params, "sessionId") || savedSessionId;
+    if (isReusableSessionId(requestedSessionId)) params.sessionId = requestedSessionId;
     const pending = {
       params,
       data: null,
@@ -228,7 +310,7 @@ export const fetchQrContext = createAsyncThunk(
     };
     sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(pending));
 
-    if (hasForwardedContext) {
+    if (hasForwardedContext && !tableCode) {
       const longKeys = [
         "companyId",
         "companyID",
@@ -261,9 +343,24 @@ export const fetchQrContext = createAsyncThunk(
 
     try {
       const response = await axios.get(URLS.api.qrContext, {
-        params: searchParams,
+        params: {
+          domain: requestDomain,
+          tableCode,
+          ...(isReusableSessionId(requestedSessionId) ? { sessionId: requestedSessionId } : {}),
+        },
         signal,
       });
+      if (isOccupiedContext(response.data)) {
+        clearSavedQrSessionId(requestDomain, tableCode);
+        persistTableSessionId(null, null);
+        return rejectWithValue(TABLE_OCCUPIED_ERROR);
+      }
+
+      const responseSessionId = readResponseValue(response.data, ["sessionId", "tableSessionId", "uidSessionId"]);
+      if (tableCode && isReusableSessionId(responseSessionId)) {
+        params.sessionId = responseSessionId;
+        saveQrSessionId(requestDomain, tableCode, responseSessionId);
+      }
       persistTableSessionId(params, response.data);
       const context = { params, data: response.data, fetchedAt: new Date().toISOString(), deviceId };
       sessionStorage.setItem(QR_CONTEXT_STORAGE_KEY, JSON.stringify(context));
@@ -272,6 +369,10 @@ export const fetchQrContext = createAsyncThunk(
       if (axios.isCancel(error)) throw error;
       return rejectWithValue(axios.isAxiosError(error) ? error.message : "Unable to load QR context");
     }
+  },
+  {
+    condition: (_, { getState }) =>
+      (getState() as { qrContext: QrContextState }).qrContext.status !== "loading",
   },
 );
 
@@ -348,6 +449,7 @@ const qrContextSlice = createSlice({
 });
 
 export const selectQrContext = (state: { qrContext: QrContextState }) => state.qrContext;
+export const selectQrContextError = (state: { qrContext: QrContextState }) => state.qrContext.error;
 export const selectDeviceId = (state: { qrContext: QrContextState }) => state.qrContext.deviceId;
 export const selectCheckDeviceStatus = (state: { qrContext: QrContextState }) => state.qrContext.device.status;
 export const selectCheckDeviceData = (state: { qrContext: QrContextState }) => state.qrContext.device.data;

@@ -11,7 +11,8 @@ import {
 import { readLocal, writeLocal } from "@/utils/storage";
 import { EMPTY_SESSION, type DiningSession } from "@/types/session.types";
 import { STATIC_SESSION } from "@/config/staticSession";
-import { TABLE_SESSION_STORAGE_KEY, URLS } from "@/config/urls";
+import { URLS } from "@/config/urls";
+import { setTableSessionId } from "@/api/axiosClient";
 import { createTableSession } from "@/api/tableSession.api";
 import { getOrCreateDeviceId } from "@/utils/deviceId";
 import { getImageUrl } from "@/utils/imageUrl";
@@ -51,6 +52,13 @@ function readConfigValue(value: unknown, keys: string[]): string | null {
   for (const child of Object.values(value)) {
     const nested = readConfigValue(child, keys);
     if (nested) return nested;
+  }
+  return null;
+}
+
+function readSearchParam(params: URLSearchParams, key: string): string | null {
+  for (const [paramKey, value] of params.entries()) {
+    if (paramKey.toLowerCase() === key.toLowerCase() && value.trim()) return value.trim();
   }
   return null;
 }
@@ -95,7 +103,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const sessionId = readUrlParam("sessionId", "tableSessionId", "Table-Session-Id");
   const deviceId = storeDeviceId || readUrlParam("deviceId");
   const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
-  const hasQrUrl = Boolean(urlParams.get("type")) || hasForwardedContext;
+  const hasQrUrl = Boolean(readSearchParam(urlParams, "type") || readSearchParam(urlParams, "tableCode")) ||
+    hasForwardedContext;
   const localDomainOverrideParam = import.meta.env.DEV
     ? urlParams.get("websiteDomain")?.trim()
     : null;
@@ -109,6 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [websiteConfig, setWebsiteConfig] = useState<WebsiteConfig | null>(null);
   const [websiteConfigStatus, setWebsiteConfigStatus] = useState<WebsiteConfigStatus>("loading");
   const [websiteConfigError, setWebsiteConfigError] = useState<string | null>(null);
+  const persistedSession = readLocal(SESSION_KEY, EMPTY_SESSION);
 
   useEffect(() => {
     if (localDomainOverrideParam) {
@@ -181,6 +191,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const isDirectEntry =
     !hasQrUrl &&
+    persistedSession.source !== "qr" &&
     Boolean((websiteConfig?.companyId && websiteConfig.branchId) || (companyId && branchId));
   const buildDirectSession = (): DiningSession => ({
     ...EMPTY_SESSION,
@@ -193,7 +204,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
   const [session, setSession] = useState<DiningSession>(() => {
     if (isDirectEntry) return buildDirectSession();
-    if (!hasForwardedContext) return readLocal(SESSION_KEY, EMPTY_SESSION);
+    if (!hasForwardedContext) return persistedSession;
     return {
       ...EMPTY_SESSION,
       source: "qr",
@@ -234,7 +245,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           : { ...EMPTY_SESSION, source: "qr", capturedFrom: window.location.href }
       );
     }
-    dispatch(fetchQrContext(location.search));
+    if (!readSearchParam(urlParams, "domain") && websiteConfigStatus === "loading") return;
+    dispatch(fetchQrContext({ search: location.search, domain: websiteConfig?.domain || domain }));
   }, [
     branchId,
     companyId,
@@ -246,6 +258,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     sessionId,
     tableId,
     websiteConfig,
+    websiteConfigStatus,
+    domain,
   ]);
 
   // QR flow me companyId URL me nahi hota (sirf type/location/name aata hai) ya
@@ -334,13 +348,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const persist = (next: DiningSession) => {
     writeLocal(SESSION_KEY, next);
-    if (next.source === "qr" && next.sessionId) {
-      localStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(next.sessionId));
-      sessionStorage.setItem(TABLE_SESSION_STORAGE_KEY, JSON.stringify(next.sessionId));
-    } else {
-      localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
-      sessionStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
-    }
+    setTableSessionId(next.source === "qr" ? next.sessionId : null);
     setSession(next);
   };
 
@@ -372,8 +380,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   const clearSession = () => {
-    localStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
-    sessionStorage.removeItem(TABLE_SESSION_STORAGE_KEY);
+    setTableSessionId(null);
     persist(EMPTY_SESSION);
   };
 
