@@ -6,6 +6,7 @@ import { NavIcon } from "@/components/ui/Icon";
 import { readLocal } from "@/utils/storage";
 import { formatAED, formatOrderTime, formatPhone, formatTable } from "@/utils/format";
 import { getOrderConfirmation } from "@/api/order.api";
+import type { OrderConfirmation } from "@/types/api.types";
 import type { PlacedOrder } from "@/types/cart.types";
 
 const ORDER_KEY = "ff_last_order_v1";
@@ -28,8 +29,10 @@ interface StoredReservation {
 export function ConfirmPage() {
   const navigate = useNavigate();
   const [order, setOrder] = useState<PlacedOrder | null>(null);
+  const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(null);
   const [reservation, setReservation] = useState<StoredReservation | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const storedReservation = readLocal<StoredReservation | null>(RESERVATION_KEY, null);
@@ -45,14 +48,41 @@ export function ConfirmPage() {
     }
     setOrder(stored);
 
-    // Best-effort: confirm the order actually landed on the backend. The
-    // locally-stored order (above) is what's shown either way — this
-    // just double-checks silently and is safe to skip if it fails.
-    if (stored.orderId) {
-      getOrderConfirmation(stored.orderId).catch((err) => {
-        console.error("Could not verify order confirmation", err);
-      });
-    }
+    if (!stored.orderId) return;
+
+    let cancelled = false;
+    let refreshing = false;
+    const refreshOrder = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const result = await getOrderConfirmation(stored.orderId!);
+        if (!cancelled) {
+          if (result) {
+            setConfirmation(result);
+            setRefreshError(false);
+          } else {
+            console.error("Order confirmation API returned no order details");
+            setRefreshError(true);
+          }
+        }
+      } catch (err) {
+        console.error("Could not refresh order confirmation", err);
+        if (!cancelled) setRefreshError(true);
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    void refreshOrder();
+    const refreshInterval = window.setInterval(() => void refreshOrder(), 60_000);
+    const clockInterval = window.setInterval(() => setNow(Date.now()), 1_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshInterval);
+      window.clearInterval(clockInterval);
+    };
   }, [navigate]);
 
   if (!reservation && !order) return null;
@@ -108,6 +138,16 @@ export function ConfirmPage() {
   if (!order) return null;
 
   const customer = order.customer;
+  const orderDetails = confirmation?.order;
+  const orderStatus = orderDetails?.orderStatus?.toUpperCase() || "PLACED";
+  const accepted = orderStatus === "ACCEPTED" || Boolean(orderDetails?.acceptedDateTime);
+  const acceptedAt = parseOrderDate(orderDetails?.acceptedDateTime);
+  const estimatedReadyAt = parseOrderDate(orderDetails?.estimatedReadyDateTime) ??
+    (acceptedAt != null && orderDetails?.estimatedMinutes != null
+      ? acceptedAt + orderDetails.estimatedMinutes * 60_000
+      : null);
+  const remainingMs = estimatedReadyAt == null ? null : Math.max(0, estimatedReadyAt - now);
+  const apiItems = confirmation?.items ?? [];
 
   return (
     <main className="page">
@@ -118,14 +158,47 @@ export function ConfirmPage() {
 
         <section className="confirm__panel" aria-labelledby="confirm-title">
           <h1 id="confirm-title" className="confirm__title">
-            Order Confirmed!
+            {orderStatus === "ACCEPTED" ? "Order Accepted" : "Order Received"}
           </h1>
           <p className="confirm__thanks">Thank you for dining with us.</p>
           <p className="confirm__lead">
-            Your order has been successfully placed. We've received your details and will have your order ready for
-            you shortly.
+            {accepted
+              ? "The restaurant has accepted your order and is preparing it."
+              : "Your order is placed. Please wait while the restaurant accepts it."}
           </p>
           <span className="checkout__ornament confirm__ornament" aria-hidden="true" />
+
+          <section className={`order-tracking${accepted ? " is-accepted" : ""}`} aria-live="polite">
+            <span className="order-tracking__status">
+              <span className="order-tracking__dot" aria-hidden="true" />
+              {orderDetails ? orderStatus : "CHECKING STATUS"}
+            </span>
+            {!accepted && (
+              <p className="order-tracking__message">
+                Your order has not been accepted by the restaurant yet. Please wait; we are checking for updates every minute.
+              </p>
+            )}
+            {accepted && orderDetails?.estimatedMinutes != null && (
+              <div className="order-tracking__eta">
+                <span>{remainingMs == null ? "Estimated preparation time" : "Estimated time remaining"}</span>
+                <strong>
+                  {remainingMs == null
+                    ? `About ${orderDetails.estimatedMinutes} minutes`
+                    : remainingMs === 0
+                      ? "Ready soon"
+                      : formatRemainingTime(remainingMs)}
+                </strong>
+              </div>
+            )}
+            {accepted && orderDetails?.estimatedMinutes == null && (
+              <p className="order-tracking__message">Your order is being prepared. The restaurant will update the estimated time shortly.</p>
+            )}
+            {refreshError && (
+              <p className="order-tracking__error" role="status">
+                Could not refresh order status. We will try again in a minute.
+              </p>
+            )}
+          </section>
 
           <dl className="confirm__card">
             <div className="confirm__row">
@@ -135,7 +208,7 @@ export function ConfirmPage() {
                 </span>
                 <span>Order ID</span>
               </dt>
-              <dd>{order.orderNo || order.id || "—"}</dd>
+              <dd>{orderDetails?.orderNo || order.orderNo || orderDetails?.orderId || order.orderId || order.id || "—"}</dd>
             </div>
             <div className="confirm__row">
               <dt>
@@ -144,7 +217,7 @@ export function ConfirmPage() {
                 </span>
                 <span>Order Time</span>
               </dt>
-              <dd>{formatOrderTime(order.createdAt)}</dd>
+              <dd>{formatOrderDisplayTime(orderDetails?.orderDateTime || order.createdAt)}</dd>
             </div>
             <div className="confirm__row">
               <dt>
@@ -153,7 +226,7 @@ export function ConfirmPage() {
                 </span>
                 <span>Table Number</span>
               </dt>
-              <dd>{formatTable(customer.table)}</dd>
+              <dd>{formatTable(orderDetails?.tableNo || customer.table)}</dd>
             </div>
             <div className="confirm__row">
               <dt>
@@ -162,7 +235,27 @@ export function ConfirmPage() {
                 </span>
                 <span>Mobile Number</span>
               </dt>
-              <dd>{formatPhone(customer.countryCode, customer.phone)}</dd>
+              <dd>{formatPhone(orderDetails?.countryCode || customer.countryCode, orderDetails?.mobile || customer.phone)}</dd>
+            </div>
+            <div className="confirm__row">
+              <dt><span className="confirm__row-icon" aria-hidden="true"><NavIcon name="clipboard" /></span><span>Order Status</span></dt>
+              <dd>{orderDetails ? orderStatus : "Checking…"}</dd>
+            </div>
+            {orderDetails?.acceptedDateTime && (
+              <div className="confirm__row">
+                <dt><span className="confirm__row-icon" aria-hidden="true"><NavIcon name="clock" /></span><span>Accepted At</span></dt>
+                <dd>{formatOrderDisplayTime(orderDetails.acceptedDateTime)}</dd>
+              </div>
+            )}
+            {orderDetails?.estimatedReadyDateTime && (
+              <div className="confirm__row">
+                <dt><span className="confirm__row-icon" aria-hidden="true"><NavIcon name="clock" /></span><span>Estimated Ready</span></dt>
+                <dd>{formatOrderDisplayTime(orderDetails.estimatedReadyDateTime)}</dd>
+              </div>
+            )}
+            <div className="confirm__row">
+              <dt><span className="confirm__row-icon" aria-hidden="true"><NavIcon name="clipboard" /></span><span>Subtotal</span></dt>
+              <dd>{formatAED(orderDetails?.subTotal ?? order.total)}</dd>
             </div>
           </dl>
 
@@ -181,39 +274,54 @@ export function ConfirmPage() {
               <NavIcon name="home" />
               Back to Menu
             </Link>
-            <button
-              type="button"
-              className="btn btn-primary confirm__btn"
-              aria-expanded={showSummary}
-              onClick={() => setShowSummary((s) => !s)}
-            >
+            <a href="#order-summary" className="btn btn-primary confirm__btn">
               <NavIcon name="clipboard" />
-              View Order Summary
-            </button>
+              View Order
+            </a>
           </div>
 
-          {showSummary && (
-            <div className="confirm__summary">
-              <h2 className="confirm__summary-title">Order Summary</h2>
-              <ul className="confirm__summary-list">
-                {order.items.map((item) => (
-                  <li key={item.id}>
-                    <span>
-                      <span className="qty">{item.qty}×</span>
-                      {item.name}
-                    </span>
-                    <span>{formatAED(item.price * item.qty)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="confirm__summary-total">
-                <span>Total</span>
-                <strong>{formatAED(order.total || 0)}</strong>
-              </div>
+          <div className="confirm__summary" id="order-summary">
+            <h2 className="confirm__summary-title">Order Summary</h2>
+            <ul className="confirm__summary-list">
+              {apiItems.length > 0
+                ? apiItems.map((item, index) => (
+                    <li key={`${item.itemName}-${index}`}>
+                      <span><span className="qty">{item.quantity}×</span>{item.itemName}</span>
+                      <span>{formatAED(item.totalPrice)}</span>
+                    </li>
+                  ))
+                : order.items.map((item) => (
+                    <li key={item.id}>
+                      <span><span className="qty">{item.qty}×</span>{item.name}</span>
+                      <span>{formatAED(item.price * item.qty)}</span>
+                    </li>
+                  ))}
+            </ul>
+            <div className="confirm__summary-total">
+              <span>Total</span>
+              <strong>{formatAED(orderDetails?.subTotal ?? order.total)}</strong>
             </div>
-          )}
+          </div>
         </section>
       </div>
     </main>
   );
+}
+
+function parseOrderDate(value?: string | null): number | null {
+  if (!value) return null;
+  const timestamp = new Date(value.includes(" ") ? value.replace(" ", "T") : value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function formatOrderDisplayTime(value?: string | null): string {
+  const timestamp = parseOrderDate(value);
+  return timestamp == null ? "—" : formatOrderTime(new Date(timestamp).toISOString());
+}
+
+function formatRemainingTime(milliseconds: number): string {
+  const totalMinutes = Math.ceil(milliseconds / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes} min`;
 }

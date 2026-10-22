@@ -172,6 +172,7 @@ export function CheckoutPage() {
     country,
     phoneReturn,
     deviceStatus,
+    Boolean(p.readParam("countryCode", "CountryCode")),
     {
       setName,
       setCountryCode,

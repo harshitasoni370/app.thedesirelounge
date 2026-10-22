@@ -5,6 +5,10 @@ import { useHeaderScrolled } from "@/hooks/useHeaderScrolled";
 import { URLS } from "@/config/urls";
 import { useSession } from "@/context/SessionContext";
 import { getImageUrl } from "@/utils/imageUrl";
+import { readLocal } from "@/utils/storage";
+import type { PlacedOrder } from "@/types/cart.types";
+
+const ORDER_KEY = "ff_last_order_v1";
 
 export function Header() {
   const { count } = useCart();
@@ -17,13 +21,9 @@ export function Header() {
   const logoTag =
     brandDescription.join(" ") || websiteConfig?.branchName || "Sheesha Lounge";
   const logoUrl = getImageUrl(websiteConfig?.logoUrl) || URLS.assets.logo;
-  const websiteDomain = websiteConfig?.domain?.trim();
-  const websiteHomeUrl = websiteDomain
-    ? `${/^https?:\/\//i.test(websiteDomain) ? "" : "https://"}${websiteDomain}`
-    : undefined;
-
   const params = new URLSearchParams(location.search);
   const reservationCategory = params.get("reservationCategory");
+  const lastOrder = readLocal<PlacedOrder | null>(ORDER_KEY, null);
 
   const isCheckout = location.pathname === "/checkout";
 
@@ -63,11 +63,20 @@ export function Header() {
       </Link>
 
       <div className="header__actions">
+        {lastOrder?.orderId && (
+          <Link
+            to="/confirm"
+            className="header__order-link"
+            aria-label={`View order ${lastOrder.orderNo || lastOrder.orderId}`}
+          >
+            {lastOrder.orderNo || lastOrder.orderId}
+          </Link>
+        )}
         <a
-          href={websiteHomeUrl}
+          href={websiteConfig?.digitalLoungeUrl || undefined}
           className="icon-btn header__home"
-          aria-label={`Go to ${siteName} home`}
-          aria-disabled={!websiteHomeUrl}
+          aria-label="Go to Digital Lounge home"
+          aria-disabled={!websiteConfig?.digitalLoungeUrl}
           title="Home"
         >
           <NavIcon name="home" />

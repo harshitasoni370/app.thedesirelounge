@@ -381,6 +381,26 @@ a.chip {
   flex-shrink: 0;
 }
 
+.header__order-link {
+  max-width: 118px;
+  overflow: hidden;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header__order-link:hover,
+.header__order-link:focus-visible {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 .header__home {
   color: var(--text-muted);
   border: 1px solid var(--border);
@@ -2493,6 +2513,69 @@ a.chip {
 
 .confirm__ornament {
   margin-bottom: 1.25rem;
+}
+
+.order-tracking {
+  margin: 0 0 1.15rem;
+  padding: 1rem;
+  border: 1px solid rgba(217, 102, 20, 0.42);
+  border-radius: 12px;
+  background: rgba(217, 102, 20, 0.09);
+  text-align: left;
+}
+
+.order-tracking.is-accepted {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: rgba(74, 222, 128, 0.07);
+}
+
+.order-tracking__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.order-tracking.is-accepted .order-tracking__status {
+  color: var(--success);
+}
+
+.order-tracking__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.order-tracking__message,
+.order-tracking__error {
+  margin: 0.65rem 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.order-tracking__error {
+  color: #fca5a5;
+}
+
+.order-tracking__eta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.74rem;
+}
+
+.order-tracking__eta strong {
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
 .confirm__card {

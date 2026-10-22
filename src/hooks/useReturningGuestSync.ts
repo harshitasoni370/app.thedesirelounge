@@ -52,6 +52,7 @@ export function useReturningGuestSync(
   country: CountryCode,
   phoneReturn: string,
   deviceStatus: string,
+  hasCountryCodeParam: boolean,
   fields: FieldSetters
 ) {
   const [isLookingUpGuest, setIsLookingUpGuest] = useState(deviceStatus === "loading");
@@ -81,8 +82,10 @@ export function useReturningGuestSync(
     if (returningFromDevice.guestName) {
       setName((prev) => prev || returningFromDevice.guestName!);
     }
-    if (returningFromDevice.countryCode) {
-      setCountryCode((prev) => prev || returningFromDevice.countryCode!);
+    if (returningFromDevice.countryCode && !hasCountryCodeParam) {
+      setCountryCode((prev) =>
+        prev === returningFromDevice.countryCode ? prev : returningFromDevice.countryCode!
+      );
     }
     if (returningFromDevice.mobile) {
       setPhone((prev) => prev || returningFromDevice.mobile!);
@@ -114,6 +117,7 @@ export function useReturningGuestSync(
     returningFromDevice?.countryCode,
     returningFromDevice?.mobile,
     returningFromDevice?.dateOfBirth,
+    hasCountryCodeParam,
     session.companyId,
   ]);
 

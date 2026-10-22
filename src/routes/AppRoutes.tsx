@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { HomePage } from "@/pages/HomePage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
@@ -19,6 +20,7 @@ import { OffersPage } from "@/pages/OffersPage";
  */
 export function AppRoutes() {
   const location = useLocation();
+  const qrHomeLocationKey = useRef<string | null>(null);
   const params = new URLSearchParams(location.search);
   const hasForwardedContext =
     Boolean(params.get("companyId") || params.get("companyID") || params.get("uidCompanyId")) &&
@@ -28,10 +30,23 @@ export function AppRoutes() {
       params.get("sessionId") || params.get("tableSessionId") || params.get("Table-Session-Id")
     );
   const hasQrParams = params.has("type") || hasForwardedContext;
+  const isQrHome = location.pathname === "/" && hasQrParams;
+
+  if (isQrHome && qrHomeLocationKey.current === location.key) {
+    return (
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+      </Routes>
+    );
+  }
+
+  if (isQrHome) {
+    qrHomeLocationKey.current = location.key;
+  }
 
   return (
     <Routes>
-      <Route path="/" element={hasQrParams ? <Navigate to={`/categories${location.search}`} replace /> : <HomePage />} />
+      <Route path="/" element={hasQrParams ? <Navigate to={`/categories${location.search}`} /> : <HomePage />} />
       <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/category" element={<CategoryLandingPage />} />
       <Route path="/menu" element={<MenuPage />} />

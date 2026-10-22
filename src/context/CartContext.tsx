@@ -23,6 +23,10 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
+function getTenantCartKey(companyId: string, branchId: string): string {
+  return `${CART_KEY}:${encodeURIComponent(companyId)}:${encodeURIComponent(branchId)}`;
+}
+
 /**
  * The cart is optimistic-local-first: every action updates `items`
  * immediately so the UI never waits on the network, then mirrors the
@@ -37,54 +41,101 @@ const CartContext = createContext<CartContextValue | undefined>(undefined);
  * a fresh cart.
  */
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { session } = useSession();
+  const { session, websiteConfig, websiteConfigStatus } = useSession();
   const location = useLocation();
-  const [items, setItems] = useState<CartItem[]>(() => readLocal(CART_KEY, [] as CartItem[]));
-  const [cartId, setCartId] = useState<string | null>(() => readLocal(CART_ID_KEY, null as string | null));
-  const cartIdRef = useRef(cartId);
+  const params = new URLSearchParams(location.search);
+  const hasQrContext =
+    params.has("type") ||
+    params.has("tableCode") ||
+    (Boolean(params.get("companyId") || params.get("companyID") || params.get("uidCompanyId")) &&
+      Boolean(params.get("branchId") || params.get("branchID") || params.get("uidBranchId")) &&
+      Boolean(
+        params.get("tableId") || params.get("tableID") || params.get("uidTableId") ||
+        params.get("sessionId") || params.get("tableSessionId") || params.get("Table-Session-Id")
+      ));
+  const tenantCompanyId = hasQrContext
+    ? session.source === "qr" ? session.companyId : null
+    : websiteConfigStatus === "succeeded" ? websiteConfig?.companyId : null;
+  const tenantBranchId = hasQrContext
+    ? session.source === "qr" ? session.branchId : null
+    : websiteConfigStatus === "succeeded" ? websiteConfig?.branchId : null;
+  const storageKey =
+    tenantCompanyId && tenantBranchId
+      ? getTenantCartKey(tenantCompanyId, tenantBranchId)
+      : null;
+  const cartIdKey = storageKey ? `${storageKey}:${CART_ID_KEY}` : null;
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [cartId, setCartId] = useState<string | null>(null);
+  const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
+  const cartIdByStorageKeyRef = useRef(new Map<string, string | null>());
+  const storageKeyRef = useRef(storageKey);
+  storageKeyRef.current = storageKey;
   const addQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
+    if (!storageKey || !cartIdKey) {
+      setItems([]);
+      setCartId(null);
+      setLoadedStorageKey(null);
+      return;
+    }
+
+    const savedItems = readLocal(storageKey, [] as CartItem[]);
+    const savedCartId = readLocal(cartIdKey, null as string | null);
+    cartIdByStorageKeyRef.current.set(storageKey, savedCartId);
+    setItems(savedItems);
+    setCartId(savedCartId);
+    setLoadedStorageKey(storageKey);
+  }, [cartIdKey, storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || loadedStorageKey !== storageKey) return;
     const urlCartId = new URLSearchParams(location.search).get("cartId");
     if (urlCartId && urlCartId !== cartId) {
-      persistItems([]);
-      persistCartId(urlCartId);
+      persistItems([], storageKey);
+      persistCartId(urlCartId, storageKey);
     }
-  }, [cartId, location.search]);
+  }, [cartId, loadedStorageKey, location.search, storageKey]);
 
-  const persistItems = (next: CartItem[]) => {
-    setItems(next);
-    writeLocal(CART_KEY, next);
+  const persistItems = (next: CartItem[], key = storageKey) => {
+    if (!key) return;
+    writeLocal(key, next);
+    if (storageKeyRef.current === key) setItems(next);
   };
 
-  const persistCartId = (next: string | null) => {
-    cartIdRef.current = next;
-    setCartId(next);
-    writeLocal(CART_ID_KEY, next);
+  const persistCartId = (next: string | null, key = storageKey) => {
+    if (!key) return;
+    cartIdByStorageKeyRef.current.set(key, next);
+    writeLocal(`${key}:${CART_ID_KEY}`, next);
+    if (storageKeyRef.current === key) {
+      setCartId(next);
+    }
   };
 
   // Re-hydrate from the server once, whenever we have a cartId but the
   // local copy is empty (e.g. returning to the site after closing the tab).
   useEffect(() => {
-    if (!cartId || items.length > 0) return;
+    if (!storageKey || loadedStorageKey !== storageKey || !cartId || items.length > 0) return;
     let cancelled = false;
     getCartItems(cartId, session.sessionId)
       .then((serverItems) => {
-        if (!cancelled && serverItems.length > 0) persistItems(serverItems);
+        if (!cancelled && serverItems.length > 0) persistItems(serverItems, storageKey);
       })
       .catch((err) => console.error("Could not load saved cart", err));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartId, session.sessionId]);
+  }, [cartId, items.length, loadedStorageKey, session.sessionId, storageKey]);
 
   const addToCart = (product: MenuItem, qty = 1) => {
-    const existing = items.find((i) => i.id === product.id);
+    if (!storageKey || loadedStorageKey !== storageKey) return;
+    const activeItems = items;
+    const existing = activeItems.find((i) => i.id === product.id);
     const next: CartItem[] = existing
-      ? items.map((i) => (i.id === product.id ? { ...i, qty: i.qty + qty } : i))
+      ? activeItems.map((i) => (i.id === product.id ? { ...i, qty: i.qty + qty } : i))
       : [
-          ...items,
+          ...activeItems,
           {
             id: product.id,
             name: product.name,
@@ -95,7 +146,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             qty,
           },
         ];
-    persistItems(next);
+    persistItems(next, storageKey);
 
     if (!session.companyId || !session.branchId) {
       console.warn("No session yet — item added locally only, not synced to server.");
@@ -106,15 +157,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const { cartId: newCartId, cartItemId } = await addCartItem({
         companyId: session.companyId!,
         branchId: session.branchId!,
-        cartId: cartIdRef.current,
+        cartId: cartIdByStorageKeyRef.current.get(storageKey) ?? null,
         menuItemId: product.id,
         quantity: existing ? existing.qty + qty : qty,
       });
-      if (newCartId && newCartId !== cartIdRef.current) persistCartId(newCartId);
+      if (newCartId && newCartId !== cartIdByStorageKeyRef.current.get(storageKey)) {
+        persistCartId(newCartId, storageKey);
+      }
       if (cartItemId) {
         setItems((prev) => {
+          if (storageKeyRef.current !== storageKey) return prev;
           const updated = prev.map((i) => (i.id === product.id ? { ...i, cartItemId } : i));
-          writeLocal(CART_KEY, updated);
+          writeLocal(storageKey, updated);
           return updated;
         });
       }
@@ -126,31 +180,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const rebuildServerCart = async (): Promise<string | null> => {
+    if (!storageKey || loadedStorageKey !== storageKey) return null;
     let rebuiltCartId: string | null = null;
     const rebuildTask = addQueueRef.current.then(async () => {
       if (!session.companyId || !session.branchId || items.length === 0) return;
 
-      persistCartId(null);
+      persistCartId(null, storageKey);
       let rebuiltItems: CartItem[] = items.map((item) => ({ ...item, cartItemId: undefined }));
-      persistItems(rebuiltItems);
+      persistItems(rebuiltItems, storageKey);
 
       for (let index = 0; index < rebuiltItems.length; index += 1) {
         const item = rebuiltItems[index];
         const result = await addCartItem({
           companyId: session.companyId!,
           branchId: session.branchId!,
-          cartId: cartIdRef.current,
+          cartId: cartIdByStorageKeyRef.current.get(storageKey) ?? null,
           menuItemId: item.id,
           quantity: item.qty,
         });
         if (!result.cartId) throw new Error("Cart API did not return a cart ID");
 
         rebuiltCartId = result.cartId;
-        persistCartId(result.cartId);
+        persistCartId(result.cartId, storageKey);
         rebuiltItems = rebuiltItems.map((current, itemIndex) =>
           itemIndex === index ? { ...current, cartItemId: result.cartItemId || undefined } : current
         );
-        persistItems(rebuiltItems);
+        persistItems(rebuiltItems, storageKey);
       }
     });
 
@@ -162,37 +217,44 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const setQty = (productId: string, qty: number) => {
+    if (!storageKey || loadedStorageKey !== storageKey) return;
     const item = items.find((i) => i.id === productId);
     const next = qty <= 0 ? items.filter((i) => i.id !== productId) : items.map((i) => (i.id === productId ? { ...i, qty } : i));
-    persistItems(next);
+    persistItems(next, storageKey);
 
-    if (!cartId || !item?.cartItemId) return;
+    if (!cartIdByStorageKeyRef.current.get(storageKey) || !item?.cartItemId) return;
+    const activeCartId = cartIdByStorageKeyRef.current.get(storageKey)!;
     const call =
-      qty <= 0 ? removeCartItem(cartId, item.cartItemId) : updateCartQuantity(cartId, item.cartItemId, qty);
+      qty <= 0 ? removeCartItem(activeCartId, item.cartItemId) : updateCartQuantity(activeCartId, item.cartItemId, qty);
     call.catch((err) => console.error("Could not sync quantity change", err));
   };
 
   const removeFromCart = (productId: string) => {
+    if (!storageKey || loadedStorageKey !== storageKey) return;
     const item = items.find((i) => i.id === productId);
-    persistItems(items.filter((i) => i.id !== productId));
+    persistItems(items.filter((i) => i.id !== productId), storageKey);
 
-    if (!cartId || !item?.cartItemId) return;
-    removeCartItem(cartId, item.cartItemId).catch((err) => console.error("Could not sync item removal", err));
+    const activeCartId = cartIdByStorageKeyRef.current.get(storageKey);
+    if (!activeCartId || !item?.cartItemId) return;
+    removeCartItem(activeCartId, item.cartItemId).catch((err) => console.error("Could not sync item removal", err));
   };
 
   const clearCart = () => {
-    persistItems([]);
-    persistCartId(null);
+    if (!storageKey || loadedStorageKey !== storageKey) return;
+    persistItems([], storageKey);
+    persistCartId(null, storageKey);
   };
 
-  const count = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);
-  const total = useMemo(() => items.reduce((sum, i) => sum + i.price * i.qty, 0), [items]);
+  const activeItems = loadedStorageKey === storageKey ? items : [];
+  const activeCartId = loadedStorageKey === storageKey ? cartId : null;
+  const count = useMemo(() => activeItems.reduce((sum, i) => sum + i.qty, 0), [activeItems]);
+  const total = useMemo(() => activeItems.reduce((sum, i) => sum + i.price * i.qty, 0), [activeItems]);
 
   const value: CartContextValue = {
-    items,
+    items: activeItems,
     count,
     total,
-    cartId,
+    cartId: activeCartId,
     addToCart,
     rebuildServerCart,
     setQty,

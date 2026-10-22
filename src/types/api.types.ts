@@ -263,6 +263,9 @@ export interface OrderDetailRecord {
   mobile?: string;
   subTotal?: number;
   orderStatus?: string;
+  acceptedDateTime?: string | null;
+  estimatedMinutes?: number | null;
+  estimatedReadyDateTime?: string | null;
 }
 
 export interface OrderConfirmation {

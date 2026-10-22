@@ -27,6 +27,7 @@ interface WebsiteConfig {
   branchId: string;
   branchName: string | null;
   domain: string | null;
+  digitalLoungeUrl: string | null;
   appType: string | null;
   siteName: string | null;
   logoUrl: string | null;
@@ -54,6 +55,71 @@ function readConfigValue(value: unknown, keys: string[]): string | null {
     if (nested) return nested;
   }
   return null;
+}
+
+function getDigitalLoungeUrl(
+  domainsJson: string | null,
+  currentDomain: string | null,
+  currentAppType: string | null
+): string | null {
+  if (!domainsJson || !currentDomain) return null;
+
+  let entries: unknown;
+  try {
+    entries = JSON.parse(domainsJson) as unknown;
+  } catch (error) {
+    console.error("Could not parse domainsJson from WebsiteUrl/by-domain", error);
+    return null;
+  }
+  if (!Array.isArray(entries)) {
+    console.error("domainsJson from WebsiteUrl/by-domain must be a JSON array");
+    return null;
+  }
+
+  const normalizeHost = (value: string): string | null => {
+    try {
+      return new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`)
+        .hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  };
+
+  const currentHost = normalizeHost(currentDomain);
+  if (!currentHost) return null;
+  const isDigitalLounge = currentAppType?.toUpperCase() === "DL";
+  const loungeHost = isDigitalLounge
+    ? currentHost
+    : currentHost.startsWith("app.")
+      ? `dl.${currentHost.slice("app.".length)}`
+      : currentHost.startsWith("app-")
+        ? `dl-${currentHost.slice("app-".length)}`
+        : null;
+  if (!loungeHost) {
+    console.error(`Could not determine the Digital Lounge domain for ${currentDomain}`);
+    return null;
+  }
+
+  const loungeEntry = entries.find((entry): entry is Record<string, unknown> => {
+    if (!entry || typeof entry !== "object") return false;
+    const appType = entry.appType;
+    const domain = entry.domain;
+    return (
+      typeof appType === "string" &&
+      appType.toUpperCase() === "DL" &&
+      typeof domain === "string" &&
+      normalizeHost(domain) === loungeHost
+    );
+  });
+  if (!loungeEntry) return null;
+
+  const target = typeof loungeEntry.url === "string" ? loungeEntry.url : String(loungeEntry.domain);
+  try {
+    const url = new URL(/^https?:\/\//i.test(target) ? target : `https://${target}`);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function readSearchParam(params: URLSearchParams, key: string): string | null {
@@ -139,14 +205,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return response.json() as Promise<unknown>;
       })
       .then((payload) => {
+        const appDomain = readConfigValue(payload, ["domain"]);
+        const appType = readConfigValue(payload, ["appType"]);
+        const digitalLoungeUrl = getDigitalLoungeUrl(
+          readConfigValue(payload, ["domainsJson", "domainJson"]),
+          appDomain,
+          appType
+        );
+        if (!digitalLoungeUrl) {
+          console.error(`Website configuration for ${domain} has no matching Digital Lounge domain`);
+        }
         const config: WebsiteConfig = {
           websiteUrlId: readConfigValue(payload, ["websiteUrlId", "uidWebsiteUrlId"]),
           companyId: readConfigValue(payload, ["companyId", "uidCompanyId", "companyID"]) || "",
           companyName: readConfigValue(payload, ["companyName", "strCompanyName"]),
           branchId: readConfigValue(payload, ["branchId", "uidBranchId", "branchID"]) || "",
           branchName: readConfigValue(payload, ["branchName", "strBranchName"]),
-          domain: readConfigValue(payload, ["domain"]),
-          appType: readConfigValue(payload, ["appType"]),
+          domain: appDomain,
+          digitalLoungeUrl,
+          appType,
           siteName: readConfigValue(payload, ["siteName", "websiteName", "strSiteName"]),
           logoUrl: readConfigValue(payload, ["logoUrl", "logo", "strLogoUrl"]),
           themeJson: readConfigValue(payload, ["themeJson"]),

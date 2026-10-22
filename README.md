@@ -67,7 +67,9 @@ Flow:
    Its website identity (site name, logo, branch, contact details, country
    code, address, timezone, theme JSON and remaining response fields) is
    shared with the UI; branding, document metadata, checkout defaults and
-   contact links use the resolved domain configuration.
+   contact links use the resolved domain configuration. The header home icon
+   uses `domainsJson` to open the matching `DL` domain for the current `APP`
+   domain.
    Menu API requests wait until those IDs match the current domain, so a
    session saved for a different restaurant is never reused accidentally.
 5. Pages that need a branch to function (`Categories`, category landing,
