@@ -150,6 +150,7 @@ export interface AddCartRequest {
   cartId?: string;
   menuItemId: string;
   quantity: number;
+  price?: number;
 }
 
 /** DELETE /Cart/removeitem — confirmed request shape from Postman. */

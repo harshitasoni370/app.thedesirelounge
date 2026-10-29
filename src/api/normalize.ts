@@ -135,12 +135,16 @@ function hasFoodType(raw: MenuItemApiRecord): boolean {
 export function normalizeMenuItem(raw: MenuItemApiRecord): MenuItem {
   const rawPrice =
     raw.currentPrice ?? raw.basePrice ?? raw.salePrice ?? raw.sellingPrice ?? raw.decPrice ?? raw.price ?? raw.rate ?? raw.mrp ?? 0;
+  const halfPrice = raw.halfPrice == null ? null : toNumber(raw.halfPrice, 0);
+  const fullPrice = raw.fullPrice == null ? null : toNumber(raw.fullPrice, 0);
   return {
     id: String(raw.uidMenuItemId ?? raw.id ?? raw.menuItemId ?? raw.itemId ?? ""),
     subcategoryId: String(raw.uidSubCategoryId ?? raw.subcategoryId ?? ""),
     name: String(raw.strItemName ?? raw.itemName ?? raw.name ?? "Untitled"),
     description: String(raw.description ?? raw.itemDescription ?? raw.shortDescription ?? ""),
     price: toNumber(rawPrice, 0),
+    halfPrice,
+    fullPrice,
     image: (raw.imagePath as string) ?? (raw.image as string) ?? (raw.imageUrl as string) ?? null,
     veg: parseVeg(raw),
     hasFoodType: hasFoodType(raw),

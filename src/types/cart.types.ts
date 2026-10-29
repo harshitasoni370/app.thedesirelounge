@@ -1,6 +1,9 @@
 export interface CartItem {
   /** The menu item's own id — used throughout the UI (ProductCard, CartItemRow) as the line's identity. */
   id: string;
+  /** The menu item's API ID; differs from `id` when a size variant is selected. */
+  menuItemId?: string;
+  variant?: "Half" | "Full";
   name: string;
   price: number;
   image: string | null;
@@ -49,5 +52,6 @@ export interface PlacedOrder {
   orderId?: string | null;
   /** Human-readable order number from the backend (e.g. "ORD-14"). */
   orderNo?: string | null;
+  customerId?: string | null;
   cartId?: string | null;
 }

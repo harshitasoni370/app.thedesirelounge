@@ -25,6 +25,7 @@ export async function addCartItem(params: {
   cartId: string | null;
   menuItemId: string;
   quantity: number;
+  price?: number;
 }): Promise<AddCartResult> {
   const { cartId: requestCartId, ...cartParams } = params;
   // QR flow: Table-Session-Id header jaa raha hai => cartId NAHI bhejna (server session se cart resolve karta hai).
@@ -39,7 +40,9 @@ export async function addCartItem(params: {
   let cartItemId = extractCartItemId(res.data);
   if (!cartItemId) {
     const items = extractCartItems(res.data);
-    cartItemId = items.find((i) => i.id === params.menuItemId)?.cartItemId ?? null;
+    cartItemId = items.find((item) =>
+      item.id === params.menuItemId && (params.price == null || item.price === params.price)
+    )?.cartItemId ?? null;
   }
 
   return { cartId, cartItemId };

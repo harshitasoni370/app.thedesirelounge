@@ -9,6 +9,12 @@ const defaults = {
     imageBaseUrl: "https://restaurents-api.cylsys.com",
   },
 }[environment];
+const waiterApiBase = (
+  import.meta.env.VITE_WAITER_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || defaults.apiBaseUrl
+).replace(/\/+$/, "");
+const waiterApiUrl = import.meta.env.DEV
+  ? (import.meta.env.VITE_WAITER_API_PROXY_BASE || "/waiter-api").replace(/\/+$/, "")
+  : waiterApiBase;
 
 // Use Vite's same-origin proxy during local development to avoid browser CORS.
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : defaults.apiBaseUrl);
@@ -19,6 +25,7 @@ export const URLS = {
     websiteByDomain: "/domain-api/WebsiteUrl/by-domain",
     qrContext: import.meta.env.VITE_QR_CONTEXT_API_URL || `${apiBaseUrl}/QR/qrcontext`,
     checkDevice: import.meta.env.VITE_CHECK_DEVICE_API_URL || `${apiBaseUrl}/QR/checkDevice`,
+    waiterBase: waiterApiUrl,
     imageBase: import.meta.env.VITE_IMAGE_BASE_URL || defaults.imageBaseUrl,
   },
   assets: {

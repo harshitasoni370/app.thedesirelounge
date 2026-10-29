@@ -173,6 +173,29 @@ export function normalizeDob(raw: string | null | undefined): string {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : s.split(" ")[0] || "";
 }
 
+export function isValidDob(raw: string): boolean {
+  const value = raw.trim();
+  if (!value) return true;
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+
+  const [, year, month, day] = match;
+  const date = new Date(`${value}T00:00:00`);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() + 1 !== Number(month) ||
+    date.getDate() !== Number(day)
+  ) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
 export function isGuid(value: string | null | undefined): value is string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
 }

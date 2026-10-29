@@ -21,7 +21,7 @@ const selectStyles: StylesConfig<CountryCallingCodeOption, false> = {
     minHeight: "100%",
     "&:hover": { borderColor: "transparent" },
   }),
-  valueContainer: (base) => ({ ...base, minWidth: 0, padding: "0 2px" }),
+  valueContainer: (base) => ({ ...base, minWidth: 0, padding: "0 6px" }),
   singleValue: (base) => ({
     ...base,
     color: "rgba(255, 255, 255, 0.88)",

@@ -60,7 +60,11 @@ export function NewGuestFields({
   isLiveSportsReservation,
   tableRequired,
 }: Props) {
-  const today = new Date().toISOString().split("T")[0];
+  const formatDate = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const today = formatDate(new Date());
+  const latestDob = new Date();
+  latestDob.setDate(latestDob.getDate() - 1);
 
   return (
     <div className="checkout-fields checkout-fields--grid">
@@ -122,7 +126,7 @@ export function NewGuestFields({
             className="form-input"
             type="date"
             autoComplete="bday"
-            max={today}
+            max={formatDate(latestDob)}
             value={dob}
             onChange={(e) => onDobChange(e.target.value)}
           />

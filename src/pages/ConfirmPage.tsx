@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
+import { DigitalLoungeHomeLink, Header } from "@/components/layout/Header";
 import { Stepper } from "@/components/checkout/Stepper";
 import { NavIcon } from "@/components/ui/Icon";
 import { readLocal } from "@/utils/storage";
@@ -90,7 +90,9 @@ export function ConfirmPage() {
   if (reservation) {
     return (
       <main className="page">
-        {/* <Header /> */}
+        <div className="confirm-home">
+          <DigitalLoungeHomeLink />
+        </div>
         <div className="confirm confirm--bg">
           {/* <Stepper active="confirmation" /> */}
           <section className="confirm__panel" aria-labelledby="reservation-confirm-title">

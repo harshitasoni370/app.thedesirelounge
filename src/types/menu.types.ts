@@ -33,6 +33,11 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
+  halfPrice?: number | null;
+  fullPrice?: number | null;
+  /** Original menu item ID when this item is a cart size variant. */
+  menuItemId?: string;
+  variant?: "Half" | "Full";
   image: string | null;
   veg: boolean;
   /** Whether the API supplied a food type for this item. */

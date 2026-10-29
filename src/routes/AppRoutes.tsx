@@ -7,8 +7,10 @@ import { MenuPage } from "@/pages/MenuPage";
 import { CartPage } from "@/pages/CartPage";
 import { CheckoutPage } from "@/pages/CheckoutPage";
 import { ConfirmPage } from "@/pages/ConfirmPage";
+import { OrdersPage } from "@/pages/OrdersPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { OffersPage } from "@/pages/OffersPage";
+import { CallWaiterPage } from "@/pages/CallWaiterPage";
 
 /**
  * /category and /menu carry NO id in the URL — the category/subcategory
@@ -53,8 +55,10 @@ export function AppRoutes() {
       <Route path="/cart" element={<CartPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/confirm" element={<ConfirmPage />} />
+      <Route path="/orders" element={<OrdersPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/offers" element={<OffersPage />} />
+      <Route path="/call-waiter" element={<CallWaiterPage />} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

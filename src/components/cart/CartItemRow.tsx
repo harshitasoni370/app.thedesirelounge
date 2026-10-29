@@ -28,6 +28,7 @@ export function CartItemRow({ item }: { item: CartItem }) {
         />
         <div className="cart-item__info">
           <h3 className="cart-item__name">{item.name}</h3>
+          {item.variant && <p className="cart-item__desc">{item.variant} portion</p>}
           {item.description && <p className="cart-item__desc">{item.description}</p>}
         </div>
       </div>

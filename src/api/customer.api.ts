@@ -96,7 +96,11 @@ export async function getCustomerByMobile(params: {
     customerId:
       typeof anyRecord.customerId === "string"
         ? anyRecord.customerId
-        : null,
+        : typeof anyRecord.uidCustomerId === "string"
+          ? anyRecord.uidCustomerId
+          : typeof anyRecord.id === "string"
+            ? anyRecord.id
+            : null,
 
     firstName: String(
       record.firstName ??

@@ -138,6 +138,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           ...activeItems,
           {
             id: product.id,
+            menuItemId: product.menuItemId || product.id,
+            variant: product.variant,
             name: product.name,
             price: product.price,
             image: product.image,
@@ -158,8 +160,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         companyId: session.companyId!,
         branchId: session.branchId!,
         cartId: cartIdByStorageKeyRef.current.get(storageKey) ?? null,
-        menuItemId: product.id,
+        menuItemId: product.menuItemId || product.id,
         quantity: existing ? existing.qty + qty : qty,
+        ...(product.variant ? { price: product.price } : {}),
       });
       if (newCartId && newCartId !== cartIdByStorageKeyRef.current.get(storageKey)) {
         persistCartId(newCartId, storageKey);
@@ -195,8 +198,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           companyId: session.companyId!,
           branchId: session.branchId!,
           cartId: cartIdByStorageKeyRef.current.get(storageKey) ?? null,
-          menuItemId: item.id,
+          menuItemId: item.menuItemId || item.id,
           quantity: item.qty,
+          ...(item.variant ? { price: item.price } : {}),
         });
         if (!result.cartId) throw new Error("Cart API did not return a cart ID");
 

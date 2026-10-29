@@ -21,6 +21,7 @@ import {
   getLiveSportsDetails,
   getSelectedDetails,
   normalizeDob,
+  isValidDob,
   isGuid,
   isValidPhone,
 } from "@/utils/checkoutReservation";
@@ -414,6 +415,7 @@ export function CheckoutPage() {
       tableNumber: checkout.table,
       orderId,
       orderNo,
+      customerId: returningCustomer?.customerId || returningFromDevice?.customerId || null,
       cartId,
     };
 
@@ -444,13 +446,17 @@ export function CheckoutPage() {
       showToast("Reservation and order submitted successfully");
     }
 
-    navigate("/confirm");
+    navigate(isCombinedSubmit ? "/confirm" : "/orders?all=false");
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
 
     if (guestType === "new") {
+      if (!isValidDob(dob)) {
+        showToast("Enter a valid date of birth before today");
+        return;
+      }
       if (!name || name.trim().length < 2) {
         showToast("Please enter your full name");
         return;
