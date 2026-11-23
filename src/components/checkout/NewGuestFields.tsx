@@ -241,7 +241,7 @@ export function NewGuestFields({
             </span>
             <select
               id="input-table"
-              className="form-input"
+              className="form-select"
               value={tableId}
               onChange={(e) => onTableChange(e.target.value)}
               required={tableRequired}

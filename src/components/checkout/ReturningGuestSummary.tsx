@@ -73,7 +73,7 @@ export function ReturningGuestSummary({
               <NavIcon name="table" />
             </span>
             <select
-              className="form-input"
+              className="form-select"
               aria-label="Table Number"
               value={tableId}
               onChange={(event) => onTableChange(event.target.value)}
