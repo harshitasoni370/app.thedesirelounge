@@ -11,6 +11,9 @@ import { OrdersPage } from "@/pages/OrdersPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { OffersPage } from "@/pages/OffersPage";
 import { CallWaiterPage } from "@/pages/CallWaiterPage";
+import { PayBillPage } from "@/pages/PayBillPage";
+import { MyPaymentsPage } from "@/pages/MyPaymentsPage";
+import { resolveParam } from "@/store/slices/qrContextSlice";
 
 /**
  * /category and /menu carry NO id in the URL — the category/subcategory
@@ -25,13 +28,18 @@ export function AppRoutes() {
   const qrHomeLocationKey = useRef<string | null>(null);
   const params = new URLSearchParams(location.search);
   const hasForwardedContext =
-    Boolean(params.get("companyId") || params.get("companyID") || params.get("uidCompanyId")) &&
-    Boolean(params.get("branchId") || params.get("branchID") || params.get("uidBranchId")) &&
-    Boolean(
-      params.get("tableId") || params.get("tableID") || params.get("uidTableId") ||
-      params.get("sessionId") || params.get("tableSessionId") || params.get("Table-Session-Id")
-    );
-  const hasQrParams = params.has("type") || hasForwardedContext;
+    Boolean(resolveParam(params, "companyId")) &&
+    Boolean(resolveParam(params, "branchId")) &&
+    Boolean(resolveParam(params, "tableId") || resolveParam(params, "sessionId") || resolveParam(params, "tableSessionId"));
+  const hasQrParams = Boolean(
+    resolveParam(params, "type") ||
+      resolveParam(params, "tableCode") ||
+      resolveParam(params, "location") ||
+      resolveParam(params, "name") ||
+      resolveParam(params, "resturant") ||
+      resolveParam(params, "restaurant") ||
+      hasForwardedContext
+  );
   const isQrHome = location.pathname === "/" && hasQrParams;
 
   if (isQrHome && qrHomeLocationKey.current === location.key) {
@@ -59,6 +67,8 @@ export function AppRoutes() {
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/offers" element={<OffersPage />} />
       <Route path="/call-waiter" element={<CallWaiterPage />} />
+      <Route path="/pay-bill" element={<PayBillPage />} />
+      <Route path="/payments" element={<MyPaymentsPage />} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

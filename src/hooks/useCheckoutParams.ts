@@ -72,6 +72,7 @@ export function useCheckoutParams(
   const urlPeople = readParam("guestCount", "people");
   const urlDob = readParam("dob", "dateOfBirth");
   const urlEmail = readParam("email");
+  const urlSpecialRequest = readParam("specialRequest");
   const urlReservationDate = readParam("dateStart");
   const urlCategoryName = readParam("categoryName");
   const urlTable =
@@ -86,6 +87,7 @@ export function useCheckoutParams(
    "";
   const urlBookingType = readParam("bookingType");
   const urlReservationCategory = readParam("reservationCategory");
+  const isCallWaiterRequest = urlReservationCategory === "CALL_WAITER";
   const urlReservationTitle = readParam("reservationTitle");
   const urlCategory = readParam("category");
 
@@ -101,7 +103,8 @@ export function useCheckoutParams(
   })();
 
   const isSessionReservation = Boolean(
-    urlGameName ||
+    isCallWaiterRequest ||
+      urlGameName ||
       (urlBookingType && urlBookingType !== "Table Reservation") ||
       urlReservationCategory === "EVENT" ||
       urlReservationCategory === "OFFER" ||
@@ -152,11 +155,13 @@ export function useCheckoutParams(
     urlPeople,
     urlDob,
     urlEmail,
+    urlSpecialRequest,
     urlReservationDate,
     urlTable,
     urlCategoryName,
     urlBookingType,
     urlReservationCategory,
+    isCallWaiterRequest,
     urlReservationTitle,
     urlCategory,
     urlExtraDetails,

@@ -1,4 +1,5 @@
 interface Props {
+  isCallWaiterRequest: boolean;
   isLiveSportsReservation: boolean;
   isCustomMomentReservation: boolean;
   isOfferReservation: boolean;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function BookingSummary({
+  isCallWaiterRequest,
   isLiveSportsReservation,
   isCustomMomentReservation,
   isOfferReservation,
@@ -40,8 +42,11 @@ export function BookingSummary({
       )}
 
       {selectedDetails.length > 0 && (
-        <section className="checkout-event-details" aria-label="Selected booking details">
-          <p className="checkout__eyebrow">Selected booking</p>
+        <section
+          className="checkout-event-details"
+          aria-label={isCallWaiterRequest ? "Call Waiter request details" : "Selected booking details"}
+        >
+          <p className="checkout__eyebrow">{isCallWaiterRequest ? "Call Waiter request" : "Selected booking"}</p>
           <div className="checkout-event-details__grid">
             {selectedDetails
               .filter(([, value]) => value)

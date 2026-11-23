@@ -49,7 +49,7 @@ function readSavedSession(): { source?: string; sessionId?: string | null; compa
   }
 }
 
-function hasQrFlowContext(): boolean {
+export function hasQrFlowContext(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     const getParam = (...keys: string[]) => {
@@ -59,14 +59,14 @@ function hasQrFlowContext(): boolean {
       }
       return "";
     };
-    const hasType = Boolean(getParam("type"));
+    const hasQrMarker = Boolean(getParam("type", "tableCode", "location", "name", "resturant", "restaurant"));
     const companyId = getParam("companyId", "companyID", "uidCompanyId", "cid");
     const branchId = getParam("branchId", "branchID", "uidBranchId", "bid");
     const hasTableOrSession = Boolean(
       getParam("tableId", "tableID", "uidTableId", "tid", "sessionId", "tableSessionId", "Table-Session-Id", "sid")
     );
 
-    if (hasType || (companyId && branchId && hasTableOrSession)) return true;
+    if (hasQrMarker || (companyId && branchId && hasTableOrSession)) return true;
     if (companyId && branchId) {
       const saved = readSavedSession();
       return Boolean(

@@ -9,6 +9,7 @@ import { getCountryForCallingCode } from "@/utils/countryCallingCodes";
  */
 
 interface ReservationDetailsInput {
+  isCallWaiterRequest: boolean;
   isOfferReservation: boolean;
   isCustomMomentReservation: boolean;
   isLiveSportsReservation: boolean;
@@ -34,6 +35,7 @@ export interface ReservationDetails {
 
 export function getReservationDetails(input: ReservationDetailsInput): ReservationDetails {
   const {
+    isCallWaiterRequest,
     isOfferReservation,
     isCustomMomentReservation,
     isLiveSportsReservation,
@@ -50,6 +52,17 @@ export function getReservationDetails(input: ReservationDetailsInput): Reservati
     momentName,
     readParam,
   } = input;
+
+  if (isCallWaiterRequest) {
+    return {
+      category: "CALL_WAITER",
+      title: "Call Waiter",
+      extraDetails: urlExtraDetails || {
+        id: "call-waiter",
+        name: "Call Waiter",
+      },
+    };
+  }
 
   if (isOfferReservation) {
     return {
@@ -114,6 +127,7 @@ export function getLiveSportsDetails(p: {
 }
 
 export function getSelectedDetails(p: {
+  isCallWaiterRequest: boolean;
   isTableReservation: boolean;
   isCustomMomentReservation: boolean;
   isOfferReservation: boolean;
@@ -127,6 +141,28 @@ export function getSelectedDetails(p: {
   urlReservationTitle: string;
   readParam: (...keys: string[]) => string;
 }): Array<[string, string]> {
+  if (p.isCallWaiterRequest) {
+    const details = p.readParam("extraDetails");
+    let reasons = "";
+    let note = "";
+    if (details) {
+      try {
+        const parsed = JSON.parse(details) as { reasons?: unknown; note?: unknown };
+        if (Array.isArray(parsed.reasons)) {
+          reasons = parsed.reasons.filter((reason): reason is string => typeof reason === "string").join(", ");
+        }
+        if (typeof parsed.note === "string") note = parsed.note;
+      } catch {
+        reasons = "";
+      }
+    }
+    return [
+      ["Request", "Call Waiter"],
+      ["Reason(s)", reasons],
+      ["Additional note", note],
+    ].filter(([, value]) => value) as Array<[string, string]>;
+  }
+
   if (p.isTableReservation) return [];
 
   if (p.isCustomMomentReservation) {

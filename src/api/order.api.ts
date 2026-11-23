@@ -28,6 +28,9 @@ export interface CustomerOrder {
   estimatedMinutes: number | null;
   estimatedReadyDateTime: string | null;
   grandTotal: number | null;
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  paymentReference?: string | null;
   items: CustomerOrderItem[];
   isLocalOrder?: boolean;
 }
@@ -120,7 +123,8 @@ function getCustomerOrderRecords(payload: unknown): Record<string, unknown>[] {
 
 function normalizeCustomerOrder(record: Record<string, unknown>): CustomerOrder | null {
   const nestedOrder = asRecord(getValue(record, "order"));
-  const order = nestedOrder ? { ...record, ...nestedOrder } : record;
+  const nestedPayment = asRecord(getValue(record, "payment", "paymentDetails", "transaction"));
+  const order = { ...record, ...(nestedOrder || {}), ...(nestedPayment || {}) };
   const orderId = getString(order, "orderId", "uidOrderId", "id", "orderID");
   if (!orderId) return null;
 
@@ -153,6 +157,9 @@ function normalizeCustomerOrder(record: Record<string, unknown>): CustomerOrder 
     estimatedMinutes: getNumber(order, "estimatedMinutes", "prepMinutes", "preparationMinutes"),
     estimatedReadyDateTime: getString(order, "estimatedReadyDateTime", "readyTime", "estimatedReadyAt", "readyAt"),
     grandTotal: getNumber(order, "grandTotal"),
+    paymentMethod: getString(order, "paymentMethod", "paymentType", "paymentMode", "modeOfPayment", "payment"),
+    paymentStatus: getString(order, "paymentStatus", "transactionStatus", "paymentState"),
+    paymentReference: getString(order, "paymentReference", "transactionId", "paymentId", "merchantTransactionId"),
     items,
   };
 }

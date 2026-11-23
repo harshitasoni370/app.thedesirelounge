@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { useLocation } from "react-router-dom";
 import { readLocal, writeLocal } from "@/utils/storage";
 import { addCartItem, getCartItems, removeCartItem, updateCartQuantity } from "@/api/cart.api";
+import { hasQrFlowContext } from "@/api/axiosClient";
 import { useSession } from "@/context/SessionContext";
 import type { CartItem } from "@/types/cart.types";
 import type { MenuItem } from "@/types/menu.types";
@@ -43,16 +44,7 @@ function getTenantCartKey(companyId: string, branchId: string): string {
 export function CartProvider({ children }: { children: ReactNode }) {
   const { session, websiteConfig, websiteConfigStatus } = useSession();
   const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const hasQrContext =
-    params.has("type") ||
-    params.has("tableCode") ||
-    (Boolean(params.get("companyId") || params.get("companyID") || params.get("uidCompanyId")) &&
-      Boolean(params.get("branchId") || params.get("branchID") || params.get("uidBranchId")) &&
-      Boolean(
-        params.get("tableId") || params.get("tableID") || params.get("uidTableId") ||
-        params.get("sessionId") || params.get("tableSessionId") || params.get("Table-Session-Id")
-      ));
+  const hasQrContext = hasQrFlowContext();
   const tenantCompanyId = hasQrContext
     ? session.source === "qr" ? session.companyId : null
     : websiteConfigStatus === "succeeded" ? websiteConfig?.companyId : null;

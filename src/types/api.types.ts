@@ -307,7 +307,8 @@ export interface CustomerRecord {
 export interface CreateReservationRequest {
   companyId: string;
   branchId: string;
-  moduleId: string;
+  moduleId: string | null;
+  isWaiterCall?: boolean;
   reservationCategory?: string;
   guestName: string;
   countryCode: string;

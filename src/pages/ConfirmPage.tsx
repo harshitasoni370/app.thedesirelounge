@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DigitalLoungeHomeLink, Header } from "@/components/layout/Header";
 import { Stepper } from "@/components/checkout/Stepper";
 import { NavIcon } from "@/components/ui/Icon";
 import { readLocal } from "@/utils/storage";
 import { formatAED, formatOrderTime, formatPhone, formatTable } from "@/utils/format";
+import {
+  isAcceptedOrderStatus,
+  isDeliveredOrderStatus,
+  playOrderNotificationSound,
+} from "@/utils/orderNotificationSound";
 import { getOrderConfirmation } from "@/api/order.api";
 import type { OrderConfirmation } from "@/types/api.types";
 import type { PlacedOrder } from "@/types/cart.types";
@@ -33,6 +38,7 @@ export function ConfirmPage() {
   const [reservation, setReservation] = useState<StoredReservation | null>(null);
   const [refreshError, setRefreshError] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const previousOrderStatus = useRef<{ status: string; accepted: boolean } | null>(null);
 
   useEffect(() => {
     const storedReservation = readLocal<StoredReservation | null>(RESERVATION_KEY, null);
@@ -47,6 +53,7 @@ export function ConfirmPage() {
       return;
     }
     setOrder(stored);
+    previousOrderStatus.current = { status: "PLACED", accepted: false };
 
     if (!stored.orderId) return;
 
@@ -59,6 +66,15 @@ export function ConfirmPage() {
         const result = await getOrderConfirmation(stored.orderId!);
         if (!cancelled) {
           if (result) {
+            const nextStatus = result.order.orderStatus?.trim() || "PLACED";
+            const accepted = isAcceptedOrderStatus(nextStatus) || Boolean(result.order.acceptedDateTime);
+            const previous = previousOrderStatus.current;
+            if (previous && !isDeliveredOrderStatus(previous.status) && isDeliveredOrderStatus(nextStatus)) {
+              playOrderNotificationSound("delivered");
+            } else if (previous && !previous.accepted && accepted) {
+              playOrderNotificationSound("accepted");
+            }
+            previousOrderStatus.current = { status: nextStatus, accepted };
             setConfirmation(result);
             setRefreshError(false);
           } else {
@@ -276,6 +292,9 @@ export function ConfirmPage() {
               <NavIcon name="home" />
               Back to Menu
             </Link>
+            {/* <Link to="/pay-bill" className="btn btn-primary confirm__btn">
+              Pay Bill
+            </Link> */}
             <a href="#order-summary" className="btn btn-primary confirm__btn">
               <NavIcon name="clipboard" />
               View Order

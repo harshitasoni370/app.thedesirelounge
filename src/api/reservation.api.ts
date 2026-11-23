@@ -24,7 +24,8 @@ export async function createReservation(
   const normalized: CreateReservationRequest = {
     companyId: payload.companyId,
     branchId: payload.branchId,
-    moduleId: payload.moduleId || "3e340f23-d842-47f0-98e8-b0d458dc22dd",
+    moduleId: payload.isWaiterCall ? null : payload.moduleId || "3e340f23-d842-47f0-98e8-b0d458dc22dd",
+    ...(payload.isWaiterCall ? { isWaiterCall: true } : {}),
     reservationCategory: payload.reservationCategory,
     guestName: payload.guestName,
     countryCode: payload.countryCode || DEFAULT_COUNTRY_CODE,

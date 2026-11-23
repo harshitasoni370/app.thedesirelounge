@@ -1,19 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { fetchTables, type TableOption } from "@/api/table.api";
-import { createWaiterRequest, fetchWaiterTypes, type WaiterRequestType } from "@/api/waiter.api";
+import { fetchWaiterTypes, type WaiterRequestType } from "@/api/waiter.api";
+import { DEFAULT_RESERVATION_MODULE_ID } from "@/config/urls";
 import { useSession } from "@/context/SessionContext";
 
 type LoadStatus = "loading" | "succeeded" | "failed";
-type SubmitStatus = "idle" | "loading" | "succeeded" | "failed";
-
-function readMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-  const record = payload as Record<string, unknown>;
-  const message = record.message ?? record.Message;
-  return typeof message === "string" && message.trim() ? message : fallback;
-}
 
 function readErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -24,8 +17,9 @@ function normalizeTableLabel(value: string): string {
 }
 
 export function CallWaiterPage() {
-  const { session, websiteConfig } = useSession();
+  const { session, websiteConfig, deviceId } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const companyId = session.companyId || websiteConfig?.companyId || "";
   const branchId = session.branchId || websiteConfig?.branchId || "";
   const [tables, setTables] = useState<TableOption[]>([]);
@@ -39,9 +33,7 @@ export function CallWaiterPage() {
   const [typesRetry, setTypesRetry] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
-  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     if (!branchId) {
@@ -119,8 +111,6 @@ export function CallWaiterPage() {
 
   const clearFeedback = () => {
     setSubmitError("");
-    setSuccessMessage("");
-    if (submitStatus !== "loading") setSubmitStatus("idle");
   };
 
   const toggleRequestType = (id: string) => {
@@ -130,7 +120,7 @@ export function CallWaiterPage() {
     clearFeedback();
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedTableId) {
       setSubmitError("Please select your table number.");
@@ -145,25 +135,68 @@ export function CallWaiterPage() {
       return;
     }
 
-    setSubmitStatus("loading");
-    setSubmitError("");
-    setSuccessMessage("");
-
-    try {
-      const response = await createWaiterRequest({
-        companyId,
-        branchId,
-        tableId: selectedTableId,
-        requestTypeIds: selectedIds,
-        note: note.trim(),
-      });
-      setSuccessMessage(readMessage(response, "Your request has been sent. Our team will be with you shortly."));
-      setSubmitStatus("succeeded");
-    } catch (error) {
-      console.error("Could not send waiter request", error);
-      setSubmitError(readErrorMessage(error, "Unable to send your request. Please try again."));
-      setSubmitStatus("failed");
+    const selectedReasons = types
+      .filter((type) => selectedIds.includes(type.id))
+      .map((type) => type.name);
+    const selectedTable = tables.find((table) => table.id === selectedTableId);
+    const reservationDetails = {
+      id: "call-waiter",
+      name: "Call Waiter",
+      type: "call-waiter",
+      categoryName: "Call Waiter",
+      category: "CALL_WAITER",
+      bookingType: "Call Waiter",
+      reasons: selectedReasons,
+      note: note.trim(),
+      selectedItem: {
+        id: "call-waiter-reason",
+        name: selectedReasons.join(", "),
+      },
+    };
+    const specialRequest = [
+      "Call waiter requested.",
+      `Reason(s): ${selectedReasons.join(", ")}.`,
+      note.trim() ? `Additional note: ${note.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const params = new URLSearchParams(location.search);
+    [
+      "moduleId",
+      "mid",
+      "gameId",
+      "gid",
+      "gameName",
+      "gn",
+      "categoryName",
+      "cn",
+      "eventId",
+      "momentId",
+      "mid_event",
+      "offerId",
+      "offerName",
+      "offerPrice",
+    ].forEach((key) => params.delete(key));
+    params.set("companyId", companyId);
+    params.set("branchId", branchId);
+    params.set("tableId", selectedTableId);
+    params.set("moduleId", DEFAULT_RESERVATION_MODULE_ID);
+    params.set("categoryName", "Call Waiter");
+    if (selectedTable?.name || session.tableNumber) {
+      params.set("tableNumber", selectedTable?.name || session.tableNumber || "");
     }
+    if (session.sessionId) params.set("sessionId", session.sessionId);
+    if (deviceId) params.set("deviceId", deviceId);
+    params.set("category", "CALL_WAITER");
+    params.set("reservationCategory", "CALL_WAITER");
+    params.set("reservationTitle", "Call Waiter");
+    params.set("bookingType", "Call Waiter");
+    params.set("specialRequest", specialRequest);
+    params.set("extraDetails", JSON.stringify(reservationDetails));
+    params.set("hideSteps", "true");
+    params.set("hideCardIcon", "true");
+    setSubmitError("");
+    navigate({ pathname: "/checkout", search: `?${params.toString()}` });
   };
 
   const siteName = websiteConfig?.siteName || websiteConfig?.companyName || "The Desire Sheesha Lounge";
@@ -180,7 +213,7 @@ export function CallWaiterPage() {
         <header className="call-waiter-intro">
           <p className="checkout__eyebrow">Assistance</p>
           <h1 className="checkout__title">Call Waiter</h1>
-          <p>Select why you need us and your table number. Our team will be with you shortly.</p>
+          <p>Select why you need us and your table number, then continue to registration.</p>
         </header>
 
         <form className="form-panel call-waiter-form" onSubmit={handleSubmit}>
@@ -273,22 +306,17 @@ export function CallWaiterPage() {
           </div>
 
           {submitError && <p className="call-waiter-message call-waiter-message--error" role="alert">{submitError}</p>}
-          {successMessage && (
-            <p className="call-waiter-message call-waiter-message--success" role="status">{successMessage}</p>
-          )}
-
           <button
             className="btn btn-primary btn-block call-waiter-submit"
             type="submit"
             disabled={
-              submitStatus === "loading" ||
               typesStatus !== "succeeded" ||
               types.length === 0 ||
               !selectedTableId ||
               (tablesStatus === "loading" && !selectedTable)
             }
           >
-            {submitStatus === "loading" ? "Sending request…" : "Call Waiter"}
+            Continue to registration
           </button>
         </form>
       </section>

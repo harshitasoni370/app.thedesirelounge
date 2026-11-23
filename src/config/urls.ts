@@ -41,9 +41,10 @@ export const URLS = {
 
 export const QR_CONTEXT_STORAGE_KEY = "desire_qr_context";
 export const TABLE_SESSION_STORAGE_KEY = "tableSessionId";
-export const QR_CONTEXT_PARAMS = ["tableCode", "type", "location", "name", "resturant"] as const;
+export const QR_CONTEXT_PARAMS = ["tableCode", "type", "location", "name", "resturant", "restaurant"] as const;
 
 export const DEFAULT_COUNTRY_CODE = "+971";
+export const DEFAULT_RESERVATION_MODULE_ID = "3e340f23-d842-47f0-98e8-b0d458dc22dd";
 
 export const SHORT_PARAM_ALIASES: Record<string, string> = {
   cid: "companyId",
@@ -67,6 +68,7 @@ export const SHORT_PARAM_ALIASES: Record<string, string> = {
   p: "price",
   en: "eventName",
   did: "deviceId",
+  sr: "specialRequest",
   cc: "countryCode",
   dob: "dateOfBirth",
   gc: "guestCount",

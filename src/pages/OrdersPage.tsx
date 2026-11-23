@@ -9,6 +9,11 @@ import { useAppSelector } from "@/store/hooks";
 import { selectCheckDeviceStatus, selectReturningCustomer } from "@/store/slices/qrContextSlice";
 import type { PlacedOrder } from "@/types/cart.types";
 import { formatAED, formatOrderTime, formatTable } from "@/utils/format";
+import {
+  isAcceptedOrderStatus,
+  isDeliveredOrderStatus,
+  playOrderNotificationSound,
+} from "@/utils/orderNotificationSound";
 import { readLocal } from "@/utils/storage";
 
 const ORDER_KEY = "ff_last_order_v1";
@@ -26,6 +31,13 @@ export function OrdersPage() {
   const [now, setNow] = useState(Date.now());
   const resolvedCustomerId = useRef<string | null>(null);
   const refreshing = useRef(false);
+  const previousOrderStatuses = useRef<Map<string, { status: string; accepted: boolean }>>(
+    new Map(
+      storedOrder?.orderId
+        ? [[storedOrder.orderId, { status: "PLACED", accepted: false }]]
+        : []
+    )
+  );
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -88,7 +100,30 @@ export function OrdersPage() {
         }
 
         const result = await getCustomerOrders(companyId, lookupCustomerId, all);
-        if (!cancelled) setOrders(result);
+        if (!cancelled) {
+          const nextStatuses = new Map<string, { status: string; accepted: boolean }>();
+          let delivered = false;
+          let accepted = false;
+          result.forEach((order) => {
+            const status = order.orderStatus?.trim() || "Placed";
+            const isAccepted = isAcceptedOrderStatus(status) || Boolean(order.acceptedDateTime);
+            const previousStatus = previousOrderStatuses.current.get(order.orderId);
+            if (
+              previousStatus &&
+              !isDeliveredOrderStatus(previousStatus.status) &&
+              isDeliveredOrderStatus(status)
+            ) {
+              delivered = true;
+            } else if (previousStatus && !previousStatus.accepted && isAccepted) {
+              accepted = true;
+            }
+            nextStatuses.set(order.orderId, { status, accepted: isAccepted });
+          });
+          previousOrderStatuses.current = nextStatuses;
+          setOrders(result);
+          if (delivered) playOrderNotificationSound("delivered");
+          else if (accepted) playOrderNotificationSound("accepted");
+        }
       } catch (loadError) {
         console.error("Could not load customer orders", loadError);
         if (!cancelled) {
@@ -132,6 +167,7 @@ export function OrdersPage() {
           >
             Refresh orders
           </button>
+          {/* <Link to="/payments" className="btn btn-outline orders-page__refresh">My payments</Link> */}
         </header>
 
         {error && (
@@ -333,6 +369,9 @@ function toCustomerOrder(order: PlacedOrder): CustomerOrder {
     estimatedMinutes: null,
     estimatedReadyDateTime: null,
     grandTotal: order.total,
+    paymentMethod: order.payment,
+    paymentStatus: null,
+    paymentReference: null,
     items: order.items.map((item) => ({
       itemName: item.name,
       quantity: item.qty,

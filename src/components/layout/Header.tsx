@@ -18,13 +18,10 @@ export function DigitalLoungeHomeLink() {
 
     const url = new URL(websiteConfig.digitalLoungeUrl, window.location.origin);
     if (session.source === "qr") {
-      const sourceParams = Object.keys(qrContext.params).length
-        ? qrContext.params
-        : Object.fromEntries(new URLSearchParams(location.search).entries());
-
-      Object.entries(sourceParams).forEach(([key, value]) => {
-        url.searchParams.set(key, value);
-      });
+      const sourceParams = new URLSearchParams();
+      Object.entries(qrContext.params).forEach(([key, value]) => sourceParams.set(key, value));
+      new URLSearchParams(location.search).forEach((value, key) => sourceParams.set(key, value));
+      sourceParams.forEach((value, key) => url.searchParams.set(key, value));
     }
 
     return url.toString();
@@ -45,7 +42,7 @@ export function DigitalLoungeHomeLink() {
 
 export function Header() {
   const { count } = useCart();
-  const { session, websiteConfig } = useSession();
+  const { session, websiteConfig, deviceId } = useSession();
   const scrolled = useHeaderScrolled();
   const location = useLocation();
   const siteName = websiteConfig?.siteName || websiteConfig?.companyName || "The Desire Sheesha Lounge";
@@ -74,10 +71,18 @@ export function Header() {
       ].includes(reservationCategory || "")
     );
 
+  const callWaiterParams = new URLSearchParams(location.search);
+  const companyId = session.companyId || websiteConfig?.companyId;
+  const branchId = session.branchId || websiteConfig?.branchId;
+  if (companyId) callWaiterParams.set("companyId", companyId);
+  if (branchId) callWaiterParams.set("branchId", branchId);
+  if (session.tableId) callWaiterParams.set("tableId", session.tableId);
+  if (session.tableNumber) callWaiterParams.set("tableNumber", session.tableNumber);
+  if (session.sessionId) callWaiterParams.set("sessionId", session.sessionId);
+  if (deviceId) callWaiterParams.set("deviceId", deviceId);
+  const callWaiterSearch = callWaiterParams.toString();
   const showCallWaiter =
-    (session.companyId || websiteConfig?.companyId) &&
-    (session.branchId || websiteConfig?.branchId) &&
-    ["/", "/categories"].includes(location.pathname);
+    Boolean(companyId && branchId) && location.pathname !== "/call-waiter";
 
   return (
     <>
@@ -125,7 +130,7 @@ export function Header() {
       </header>
       {showCallWaiter && (
         <Link
-          to={{ pathname: "/call-waiter", search: location.search }}
+          to={{ pathname: "/call-waiter", search: callWaiterSearch ? `?${callWaiterSearch}` : "" }}
           className="call-waiter-fab"
           aria-label="Call waiter for assistance"
         >

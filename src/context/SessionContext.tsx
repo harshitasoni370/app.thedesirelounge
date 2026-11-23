@@ -169,8 +169,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const sessionId = readUrlParam("sessionId", "tableSessionId", "Table-Session-Id");
   const deviceId = storeDeviceId || readUrlParam("deviceId");
   const hasForwardedContext = Boolean(companyId && branchId && (tableId || sessionId));
-  const hasQrUrl = Boolean(readSearchParam(urlParams, "type") || readSearchParam(urlParams, "tableCode")) ||
-    hasForwardedContext;
+  const hasQrUrl = Boolean(
+    readSearchParam(urlParams, "type") ||
+      readSearchParam(urlParams, "tableCode") ||
+      readSearchParam(urlParams, "location") ||
+      readSearchParam(urlParams, "name") ||
+      readSearchParam(urlParams, "resturant") ||
+      readSearchParam(urlParams, "restaurant") ||
+      hasForwardedContext
+  );
   const localDomainOverrideParam = import.meta.env.DEV
     ? urlParams.get("websiteDomain")?.trim()
     : null;

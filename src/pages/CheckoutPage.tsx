@@ -12,6 +12,7 @@ import { useSession } from "@/context/SessionContext";
 import { useToast } from "@/context/ToastContext";
 import { generateOrderId } from "@/utils/format";
 import { writeLocal } from "@/utils/storage";
+import { playOrderNotificationSound, unlockOrderNotificationSound } from "@/utils/orderNotificationSound";
 import { placeOrder as placeOrderApi } from "@/api/order.api";
 import { createReservation } from "@/api/reservation.api";
 import { fetchTables, type TableOption } from "@/api/table.api";
@@ -106,13 +107,9 @@ export function CheckoutPage() {
   const [dob, setDob] = useState(p.urlDob || normalizeDob(returningFromDevice?.dateOfBirth ?? null));
   const [email, setEmail] = useState(p.urlEmail);
   const initialDateTime = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString();
-  const [reservationDate, setReservationDate] = useState(
-    p.urlReservationDate || (p.isReservationCheckout ? "" : initialDateTime.slice(0, 10))
-  );
-  const [reservationTime, setReservationTime] = useState(
-    p.isReservationCheckout ? "" : initialDateTime.slice(11, 16)
-  );
-  const [specialRequest, setSpecialRequest] = useState("");
+  const [reservationDate, setReservationDate] = useState(p.urlReservationDate || initialDateTime.slice(0, 10));
+  const [reservationTime, setReservationTime] = useState(initialDateTime.slice(11, 16));
+  const [specialRequest, setSpecialRequest] = useState(p.urlSpecialRequest);
   const [momentName, setMomentName] = useState(p.urlMomentName);
 
   // Returning-guest fields (normal Order flow)
@@ -267,6 +264,7 @@ export function CheckoutPage() {
             companyId: p.reservationCompanyId,
             branchId: p.reservationBranchId,
             moduleId: p.reservationModuleId,
+            ...(p.isCallWaiterRequest ? { isWaiterCall: true } : {}),
             reservationCategory: category,
             guestName: checkout.name || "Guest",
             countryCode: checkout.countryCode,
@@ -420,6 +418,7 @@ export function CheckoutPage() {
     };
 
     writeLocal(ORDER_KEY, order);
+    playOrderNotificationSound("placed");
 
     if (checkout.table) {
       setTableNumber(checkout.table);
@@ -451,6 +450,7 @@ export function CheckoutPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (items.length > 0) unlockOrderNotificationSound();
 
     if (guestType === "new") {
       if (!isValidDob(dob)) {
@@ -594,11 +594,16 @@ export function CheckoutPage() {
         <header className="checkout__intro">
           <p className="checkout__eyebrow">Tell us a little</p>
           <h1 className="checkout__title">About You</h1>
-          <p className="checkout__hint">Just a few details to complete your order.</p>
+          <p className="checkout__hint">
+            {p.isCallWaiterRequest
+              ? "Just a few details to send your Call Waiter request."
+              : "Just a few details to complete your order."}
+          </p>
           <span className="checkout__ornament" aria-hidden="true" />
         </header>
 
         <BookingSummary
+          isCallWaiterRequest={p.isCallWaiterRequest}
           isLiveSportsReservation={p.isLiveSportsReservation}
           isCustomMomentReservation={p.isCustomMomentReservation}
           isOfferReservation={p.isOfferReservation}
@@ -666,6 +671,8 @@ export function CheckoutPage() {
           <button type="submit" className="btn btn-primary btn-block btn-checkout" disabled={isLookingUpGuest}>
             {isLookingUpGuest
               ? "Checking…"
+              : p.isCallWaiterRequest
+                ? "Send Call Waiter Request"
               : p.isOfferReservation
                 ? "Reserve This Offer"
                 : p.isReservationCheckout
