@@ -624,6 +624,27 @@ a.chip {
   color: var(--text);
 }
 
+.header__search {
+  width: 156px;
+  min-width: 0;
+  height: 34px;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: #111;
+  color: var(--text);
+  font-size: 0.68rem;
+}
+
+.header__search::placeholder {
+  color: var(--text-muted);
+}
+
+.header__search:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
 .header__category-select,
 .header__view-select {
   min-height: 34px;
@@ -677,6 +698,18 @@ a.chip {
 .header__cart svg {
   width: 22px;
   height: 22px;
+}
+
+@media (max-width: 640px) {
+  .hero__top--menu {
+    flex-wrap: wrap;
+  }
+
+  .hero__top--menu .header__actions--menu-view {
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 .page-title {
@@ -3703,8 +3736,13 @@ a.chip {
   }
 
   .header__category-select,
-  .header__view-select {
+  .header__view-select,
+  .header__search {
     padding: 0.3rem;
+  }
+
+  .header__search {
+    width: 108px;
   }
 
   .header__category-select {

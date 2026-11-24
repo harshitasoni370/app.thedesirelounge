@@ -23,10 +23,12 @@ function MenuContent({
   subcategoryId,
   categoryId,
   menuView,
+  searchQuery,
 }: {
   subcategoryId: string;
   categoryId?: string;
   menuView: MenuView;
+  searchQuery: string;
 }) {
   const { session } = useSession();
   const [vegFilter, setVegFilter] = useState<VegFilter>("veg");
@@ -83,6 +85,12 @@ function MenuContent({
 
   const hideDietTabs = isShisha || isDietSpecificSub || isEggSub || isBeverageSub || hasMissingFoodType;
   const visibleItems = hideDietTabs ? items : filteredItems;
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const displayedItems = normalizedSearch
+    ? visibleItems.filter((item) =>
+        `${item.name} ${item.description}`.toLocaleLowerCase().includes(normalizedSearch)
+      )
+    : visibleItems;
 
   return (
     <>
@@ -142,8 +150,12 @@ function MenuContent({
 
       {menuView === "grid" ? (
         <div id="product-grid" className="menu-grid">
-          {visibleItems.length === 0 && <p className="menu-grid__empty">No items in this selection.</p>}
-          {visibleItems.map((product, index) => (
+          {displayedItems.length === 0 && (
+            <p className="menu-grid__empty">
+              {normalizedSearch ? "No menu items match your search." : "No items in this selection."}
+            </p>
+          )}
+          {displayedItems.map((product, index) => (
             <ProductCard key={product.id} product={product} priority={index < 4} />
           ))}
         </div>
@@ -160,11 +172,13 @@ function MenuContent({
               </tr>
             </thead>
             <tbody>
-              {visibleItems.length === 0 ? (
+              {displayedItems.length === 0 ? (
                 <tr>
-                  <td className="menu-table__empty" colSpan={5}>No items in this selection.</td>
+                  <td className="menu-table__empty" colSpan={5}>
+                    {normalizedSearch ? "No menu items match your search." : "No items in this selection."}
+                  </td>
                 </tr>
-              ) : visibleItems.map((product) => (
+              ) : displayedItems.map((product) => (
                 <tr key={product.id} data-product={product.id}>
                   <td>
                     <div className="menu-table__image">
@@ -227,18 +241,25 @@ export function MenuPage() {
   // without that state just bounces back to /categories.
   const location = useLocation();
   const [menuView, setMenuView] = useState<MenuView>("grid");
+  const [searchQuery, setSearchQuery] = useState("");
   const { subcategoryId } = (location.state as LocationState) || {};
 
   if (!subcategoryId) return <Navigate to="/categories" replace />;
 
   return (
     <main className="page menu-page">
-      <Header menuView={menuView} onMenuViewChange={setMenuView} />
+      <Header
+        menuView={menuView}
+        onMenuViewChange={setMenuView}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+      />
       <SessionGate>
         <MenuContent
           subcategoryId={subcategoryId}
           categoryId={((location.state as LocationState) || {}).categoryId}
           menuView={menuView}
+          searchQuery={searchQuery}
         />
       </SessionGate>
     </main>

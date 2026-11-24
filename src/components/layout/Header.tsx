@@ -46,9 +46,13 @@ export function DigitalLoungeHomeLink() {
 export function Header({
   menuView,
   onMenuViewChange,
+  searchQuery,
+  onSearchQueryChange,
 }: {
   menuView?: MenuView;
   onMenuViewChange?: (view: MenuView) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 } = {}) {
   const { count } = useCart();
   const { session, websiteConfig, deviceId } = useSession();
@@ -112,7 +116,7 @@ export function Header({
 
   return (
     <>
-      <header className={`hero__top${scrolled ? " is-scrolled" : ""}`}>
+      <header className={`hero__top${scrolled ? " is-scrolled" : ""}${menuView !== undefined ? " hero__top--menu" : ""}`}>
         <Link to="/" className="logo">
           <img
             src={logoUrl}
@@ -132,6 +136,16 @@ export function Header({
         </Link>
 
         <div className={`header__actions${menuView !== undefined ? " header__actions--menu-view" : ""}`}>
+          {searchQuery !== undefined && onSearchQueryChange && (
+            <input
+              type="search"
+              className="header__search"
+              aria-label="Search menu items"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
+            />
+          )}
           {menuView !== undefined && onMenuViewChange && (
             <select
               className="header__category-select"
