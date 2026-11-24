@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
 import { useLocation, Navigate, Link } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
-import { MenuBack } from "@/components/layout/MenuBack";
-import { ProductCard } from "@/components/menu/ProductCard";
+import { Header, type MenuView } from "@/components/layout/Header";
+import { ProductCard, ProductCartAction } from "@/components/menu/ProductCard";
 import { CategoryIcon } from "@/components/ui/Icon";
 import { Loader, ErrorState } from "@/components/ui/StatusStates";
 import { SessionGate } from "@/components/layout/SessionGate";
 import { useSession } from "@/context/SessionContext";
 import { useCategories } from "@/hooks/useCategories";
 import { useMenuItems } from "@/hooks/useMenuItems";
+import { formatAED } from "@/utils/format";
+import { getImageUrl } from "@/utils/imageUrl";
+import staticImage from "@/assets/images/staticimage.jpg";
 
 type VegFilter = "veg" | "nonveg";
 
@@ -17,7 +19,17 @@ interface LocationState {
   categoryId?: string;
 }
 
-function MenuContent({ subcategoryId, categoryId }: { subcategoryId: string; categoryId?: string }) {
+function MenuContent({
+  subcategoryId,
+  categoryId,
+  menuView,
+  searchQuery,
+}: {
+  subcategoryId: string;
+  categoryId?: string;
+  menuView: MenuView;
+  searchQuery: string;
+}) {
   const { session } = useSession();
   const [vegFilter, setVegFilter] = useState<VegFilter>("veg");
 
@@ -73,9 +85,38 @@ function MenuContent({ subcategoryId, categoryId }: { subcategoryId: string; cat
 
   const hideDietTabs = isShisha || isDietSpecificSub || isEggSub || isBeverageSub || hasMissingFoodType;
   const visibleItems = hideDietTabs ? items : filteredItems;
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const displayedItems = normalizedSearch
+    ? visibleItems.filter((item) =>
+        `${item.name} ${item.description}`.toLocaleLowerCase().includes(normalizedSearch)
+      )
+    : visibleItems;
 
   return (
     <>
+      <nav className="menu-toolbar menu-breadcrumb" aria-label="Breadcrumb">
+        <ol className="menu-breadcrumb__list">
+          <li>
+            <Link to="/categories">Categories</Link>
+          </li>
+          {parentCategory && (
+            <li>
+              <span className="menu-breadcrumb__separator" aria-hidden="true">/</span>
+              <Link
+                to="/category"
+                state={{ categoryId: parentCategory.id, categoryName: parentCategory.name }}
+              >
+                {parentCategory.name}
+              </Link>
+            </li>
+          )}
+          <li>
+            <span className="menu-breadcrumb__separator" aria-hidden="true">/</span>
+            <span className="menu-breadcrumb__current" aria-current="page">{subName}</span>
+          </li>
+        </ol>
+      </nav>
+
       <header className="menu-hero">
         <h1 className="menu-hero__title">{subName}</h1>
         <span className="menu-hero__ornament" aria-hidden="true" />
@@ -107,12 +148,64 @@ function MenuContent({ subcategoryId, categoryId }: { subcategoryId: string; cat
         </div>
       )}
 
-      <div id="product-grid" className="menu-grid">
-        {visibleItems.length === 0 && <p className="menu-grid__empty">No items in this selection.</p>}
-        {visibleItems.map((product, index) => (
-          <ProductCard key={product.id} product={product} priority={index < 4} />
-        ))}
-      </div>
+      {menuView === "grid" ? (
+        <div id="product-grid" className="menu-grid">
+          {displayedItems.length === 0 && (
+            <p className="menu-grid__empty">
+              {normalizedSearch ? "No menu items match your search." : "No items in this selection."}
+            </p>
+          )}
+          {displayedItems.map((product, index) => (
+            <ProductCard key={product.id} product={product} priority={index < 4} />
+          ))}
+        </div>
+      ) : (
+        <div className="menu-table-wrap">
+          <table className="menu-table">
+            <thead>
+              <tr>
+                <th scope="col">Image</th>
+                <th scope="col">Item</th>
+                <th scope="col">Description</th>
+                <th scope="col">Price</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayedItems.length === 0 ? (
+                <tr>
+                  <td className="menu-table__empty" colSpan={5}>
+                    {normalizedSearch ? "No menu items match your search." : "No items in this selection."}
+                  </td>
+                </tr>
+              ) : displayedItems.map((product) => (
+                <tr key={product.id} data-product={product.id}>
+                  <td>
+                    <div className="menu-table__image">
+                      <img
+                        src={getImageUrl(product.image) || staticImage}
+                        alt=""
+                        width={400}
+                        height={300}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = staticImage;
+                        }}
+                      />
+                    </div>
+                  </td>
+                  <th scope="row">{product.name}</th>
+                  <td>{product.description || "—"}</td>
+                  <td className="menu-table__price">{formatAED(product.price)}</td>
+                  <td className="menu-table__action"><ProductCartAction product={product} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {!catLoading && allSubCategories.length > 1 && (
         <section className="menu-categories" aria-labelledby="menu-cat-heading">
@@ -147,16 +240,27 @@ export function MenuPage() {
   // reached by clicking a subcategory tile, so a direct visit/refresh
   // without that state just bounces back to /categories.
   const location = useLocation();
+  const [menuView, setMenuView] = useState<MenuView>("grid");
+  const [searchQuery, setSearchQuery] = useState("");
   const { subcategoryId } = (location.state as LocationState) || {};
 
   if (!subcategoryId) return <Navigate to="/categories" replace />;
 
   return (
     <main className="page menu-page">
-      <Header />
-      <MenuBack to="/categories" label="Back to Categories" />
+      <Header
+        menuView={menuView}
+        onMenuViewChange={setMenuView}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+      />
       <SessionGate>
-        <MenuContent subcategoryId={subcategoryId} categoryId={((location.state as LocationState) || {}).categoryId} />
+        <MenuContent
+          subcategoryId={subcategoryId}
+          categoryId={((location.state as LocationState) || {}).categoryId}
+          menuView={menuView}
+          searchQuery={searchQuery}
+        />
       </SessionGate>
     </main>
   );

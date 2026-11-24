@@ -7,7 +7,7 @@ import type { MenuItem } from "@/types/menu.types";
 import staticImage from "@/assets/images/staticimage.jpg";
 import { getImageUrl } from "@/utils/imageUrl";
 
-export function ProductCard({ product, priority = false }: { product: MenuItem; priority?: boolean }) {
+export function ProductCartAction({ product }: { product: MenuItem }) {
   const { addToCart } = useCart();
   const { showToast } = useToast();
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
@@ -62,50 +62,29 @@ export function ProductCard({ product, priority = false }: { product: MenuItem; 
     };
   }, [sizePickerOpen]);
 
-  const imageSrc = getImageUrl(product.image) || staticImage;
-
   return (
-    <article className="menu-card" data-product={product.id}>
-      <div className="menu-card__media">
-        <img
-          src={imageSrc}
-          alt={product.name}
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
-          decoding="async"
-          width={400}
-          height={300}
-          onError={(event) => {
-            event.currentTarget.onerror = null;
-            event.currentTarget.src = staticImage;
+    <>
+      <button
+        type="button"
+        className="menu-card__add"
+        onClick={sizeOptions.length > 0 ? () => {
+          setPortionQuantity(1);
+          setSizePickerOpen(true);
+        } : handleAdd}
+      >
+        + Add to Cart
+      </button>
+      {sizePickerOpen && (
+        <div
+          className="size-picker"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSizePickerOpen(false);
           }}
-        />
-      </div>
-      <div className="menu-card__body">
-        <h3 className="menu-card__name">{product.name}</h3>
-        <p className="menu-card__desc">{product.description}</p>
-        <div className="menu-card__footer">
-          <span className="menu-card__price">{formatAED(product.price)}</span>
-          <button
-            type="button"
-            className="menu-card__add"
-            onClick={sizeOptions.length > 0 ? () => {
-              setPortionQuantity(1);
-              setSizePickerOpen(true);
-            } : handleAdd}
-          >
-            + Add to Cart
-          </button>
-        </div>
-      </div>
-      {sizePickerOpen &&
-        createPortal(
-          <div
-            className="size-picker"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) setSizePickerOpen(false);
-            }}
-          >
+        >
+          {createPortal(
+            <div className="size-picker__backdrop" aria-hidden="true" />,
+            document.body
+          )}
             <section
               ref={dialogRef}
               className="size-picker__dialog"
@@ -145,23 +124,54 @@ export function ProductCard({ product, priority = false }: { product: MenuItem; 
                   </button>
                 </div>
               </div>
-              <div className="size-picker__options">
-                {sizeOptions.map((option) => (
-                  <button
-                    type="button"
-                    className="size-picker__option"
-                    key={option.label}
-                    onClick={() => handleAddSize(option.label, option.price)}
-                  >
-                    <span>{option.label}</span>
-                    <strong>{formatAED(option.price)}</strong>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>,
-          document.body
-        )}
+            <div className="size-picker__options">
+              {sizeOptions.map((option) => (
+                <button
+                  type="button"
+                  className="size-picker__option"
+                  key={option.label}
+                  onClick={() => handleAddSize(option.label, option.price)}
+                >
+                  <span>{option.label}</span>
+                  <strong>{formatAED(option.price)}</strong>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function ProductCard({ product, priority = false }: { product: MenuItem; priority?: boolean }) {
+  const imageSrc = getImageUrl(product.image) || staticImage;
+
+  return (
+    <article className="menu-card" data-product={product.id}>
+      <div className="menu-card__media">
+        <img
+          src={imageSrc}
+          alt={product.name}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          width={400}
+          height={300}
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = staticImage;
+          }}
+        />
+      </div>
+      <div className="menu-card__body">
+        <h3 className="menu-card__name">{product.name}</h3>
+        <p className="menu-card__desc">{product.description}</p>
+        <div className="menu-card__footer">
+          <span className="menu-card__price">{formatAED(product.price)}</span>
+          <ProductCartAction product={product} />
+        </div>
+      </div>
     </article>
   );
 }

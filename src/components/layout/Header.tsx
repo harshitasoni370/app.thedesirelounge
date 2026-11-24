@@ -1,12 +1,15 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
 import { NavIcon } from "@/components/ui/Icon";
 import { useHeaderScrolled } from "@/hooks/useHeaderScrolled";
 import { URLS } from "@/config/urls";
 import { useSession } from "@/context/SessionContext";
+import { useCategories } from "@/hooks/useCategories";
 import { getImageUrl } from "@/utils/imageUrl";
 import { useAppSelector } from "@/store/hooks";
 import { selectQrContext } from "@/store/slices/qrContextSlice";
+
+export type MenuView = "grid" | "table";
 
 export function DigitalLoungeHomeLink() {
   const { session, websiteConfig } = useSession();
@@ -40,11 +43,22 @@ export function DigitalLoungeHomeLink() {
   );
 }
 
-export function Header() {
+export function Header({
+  menuView,
+  onMenuViewChange,
+  searchQuery,
+  onSearchQueryChange,
+}: {
+  menuView?: MenuView;
+  onMenuViewChange?: (view: MenuView) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+} = {}) {
   const { count } = useCart();
   const { session, websiteConfig, deviceId } = useSession();
   const scrolled = useHeaderScrolled();
   const location = useLocation();
+  const navigate = useNavigate();
   const siteName = websiteConfig?.siteName || websiteConfig?.companyName || "The Desire Sheesha Lounge";
   const [brandWord, ...brandDescription] = siteName.trim().replace(/^the\s+/i, "").split(/\s+/);
   const logoTitle = brandWord ? `The ${brandWord}` : siteName;
@@ -71,9 +85,25 @@ export function Header() {
       ].includes(reservationCategory || "")
     );
 
-  const callWaiterParams = new URLSearchParams(location.search);
   const companyId = session.companyId || websiteConfig?.companyId;
   const branchId = session.branchId || websiteConfig?.branchId;
+  const { categories } = useCategories(menuView !== undefined ? branchId || null : null, companyId || null);
+  const currentSubcategoryId =
+    (location.state as { subcategoryId?: string } | null)?.subcategoryId || "";
+
+  const handleCategoryChange = (subcategoryId: string) => {
+    const subcategory = categories
+      .flatMap((category) => category.subCategories)
+      .find((item) => item.id === subcategoryId);
+    if (!subcategory) return;
+
+    navigate(
+      { pathname: "/menu", search: location.search },
+      { state: { subcategoryId: subcategory.id, categoryId: subcategory.categoryId } }
+    );
+  };
+
+  const callWaiterParams = new URLSearchParams(location.search);
   if (companyId) callWaiterParams.set("companyId", companyId);
   if (branchId) callWaiterParams.set("branchId", branchId);
   if (session.tableId) callWaiterParams.set("tableId", session.tableId);
@@ -88,7 +118,7 @@ export function Header() {
 
   return (
     <>
-      <header className={`hero__top${scrolled ? " is-scrolled" : ""}`}>
+      <header className={`hero__top${scrolled ? " is-scrolled" : ""}${menuView !== undefined ? " hero__top--menu" : ""}`}>
         <Link to="/" className="logo">
           <img
             src={logoUrl}
@@ -107,7 +137,50 @@ export function Header() {
           </span>
         </Link>
 
-        <div className="header__actions">
+        <div className={`header__actions${menuView !== undefined ? " header__actions--menu-view" : ""}`}>
+          {searchQuery !== undefined && onSearchQueryChange && (
+            <input
+              type="search"
+              className="header__search"
+              aria-label="Search menu items"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
+            />
+          )}
+          {menuView !== undefined && onMenuViewChange && (
+            <select
+              className="header__category-select"
+              aria-label="Menu category"
+              value={currentSubcategoryId}
+              onChange={(event) => handleCategoryChange(event.currentTarget.value)}
+            >
+              <option value="" disabled>Categories</option>
+              {categories.map((category) => (
+                <optgroup key={category.id} label={category.name}>
+                  {category.subCategories.map((subcategory) => (
+                    <option key={subcategory.id} value={subcategory.id}>
+                      {subcategory.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          )}
+          {menuView !== undefined && onMenuViewChange && (
+            <select
+              className="header__view-select"
+              aria-label="Menu view"
+              value={menuView}
+              onChange={(event) => {
+                const view = event.currentTarget.value;
+                if (view === "grid" || view === "table") onMenuViewChange(view);
+              }}
+            >
+              <option value="grid">Grid</option>
+              <option value="table">Table</option>
+            </select>
+          )}
           <Link
             to="/orders?all=true"
             className="header__order-link"
