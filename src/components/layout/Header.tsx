@@ -82,7 +82,9 @@ export function Header() {
   if (deviceId) callWaiterParams.set("deviceId", deviceId);
   const callWaiterSearch = callWaiterParams.toString();
   const showCallWaiter =
-    Boolean(companyId && branchId) && location.pathname !== "/call-waiter";
+    session.source === "qr" &&
+    Boolean(companyId && branchId) &&
+    location.pathname !== "/call-waiter";
 
   return (
     <>

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { formatAED } from "@/utils/format";
@@ -11,6 +12,7 @@ export function ProductCard({ product, priority = false }: { product: MenuItem; 
   const { showToast } = useToast();
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
   const [portionQuantity, setPortionQuantity] = useState(1);
+  const dialogRef = useRef<HTMLElement | null>(null);
   const sizeOptions = [
     ...(product.halfPrice != null && product.halfPrice > 0
       ? [{ label: "Half" as const, price: product.halfPrice }]
@@ -40,11 +42,24 @@ export function ProductCard({ product, priority = false }: { product: MenuItem; 
 
   useEffect(() => {
     if (!sizePickerOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSizePickerOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSizePickerOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    dialogRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
   }, [sizePickerOpen]);
 
   const imageSrc = getImageUrl(product.image) || staticImage;
@@ -83,66 +98,70 @@ export function ProductCard({ product, priority = false }: { product: MenuItem; 
           </button>
         </div>
       </div>
-      {sizePickerOpen && (
-        <div
-          className="size-picker"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setSizePickerOpen(false);
-          }}
-        >
-          <section
-            className="size-picker__dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`size-picker-title-${product.id}`}
+      {sizePickerOpen &&
+        createPortal(
+          <div
+            className="size-picker"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setSizePickerOpen(false);
+            }}
           >
-            <button
-              type="button"
-              className="size-picker__close"
-              aria-label="Close size selection"
-              onClick={() => setSizePickerOpen(false)}
+            <section
+              ref={dialogRef}
+              className="size-picker__dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`size-picker-title-${product.id}`}
+              tabIndex={-1}
             >
-              ×
-            </button>
-            <p className="size-picker__eyebrow">Choose your portion</p>
-            <h2 id={`size-picker-title-${product.id}`}>{product.name}</h2>
-            <div className="size-picker__quantity">
-              <span>Quantity</span>
-              <div className="size-picker__quantity-control" aria-label="Portion quantity">
-                <button
-                  type="button"
-                  aria-label="Decrease portion quantity"
-                  disabled={portionQuantity <= 1}
-                  onClick={() => setPortionQuantity((quantity) => Math.max(1, quantity - 1))}
-                >
-                  −
-                </button>
-                <output aria-live="polite">{portionQuantity}</output>
-                <button
-                  type="button"
-                  aria-label="Increase portion quantity"
-                  onClick={() => setPortionQuantity((quantity) => quantity + 1)}
-                >
-                  +
-                </button>
+              <button
+                type="button"
+                className="size-picker__close"
+                aria-label="Close size selection"
+                onClick={() => setSizePickerOpen(false)}
+              >
+                ×
+              </button>
+              <p className="size-picker__eyebrow">Choose your portion</p>
+              <h2 id={`size-picker-title-${product.id}`}>{product.name}</h2>
+              <div className="size-picker__quantity">
+                <span>Quantity</span>
+                <div className="size-picker__quantity-control" aria-label="Portion quantity">
+                  <button
+                    type="button"
+                    aria-label="Decrease portion quantity"
+                    disabled={portionQuantity <= 1}
+                    onClick={() => setPortionQuantity((quantity) => Math.max(1, quantity - 1))}
+                  >
+                    −
+                  </button>
+                  <output aria-live="polite">{portionQuantity}</output>
+                  <button
+                    type="button"
+                    aria-label="Increase portion quantity"
+                    onClick={() => setPortionQuantity((quantity) => quantity + 1)}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="size-picker__options">
-              {sizeOptions.map((option) => (
-                <button
-                  type="button"
-                  className="size-picker__option"
-                  key={option.label}
-                  onClick={() => handleAddSize(option.label, option.price)}
-                >
-                  <span>{option.label}</span>
-                  <strong>{formatAED(option.price)}</strong>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
+              <div className="size-picker__options">
+                {sizeOptions.map((option) => (
+                  <button
+                    type="button"
+                    className="size-picker__option"
+                    key={option.label}
+                    onClick={() => handleAddSize(option.label, option.price)}
+                  >
+                    <span>{option.label}</span>
+                    <strong>{formatAED(option.price)}</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>,
+          document.body
+        )}
     </article>
   );
 }
